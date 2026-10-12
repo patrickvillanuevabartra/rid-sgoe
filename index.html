@@ -368,7 +368,7 @@ dl.meta dd{margin:0;word-break:break-word}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-09-30g';
+const BACKEND_ESPERADO = '2026-10-12a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 const CLAUSULAS = ['4 Contexto','5 Liderazgo','6 Planificación','7 Apoyo','7.5 Información documentada','8 Operación','9 Evaluación del desempeño','10 Mejora'];
 const TIPOS_OBS = ['Observación','Recomendación','Oportunidad de mejora','No conformidad','Conformidad'];
@@ -815,12 +815,14 @@ function pintarFicha(pestana){
       <dt>Proceso</dt><dd>${esc(rutaLegible(d.proceso))}</dd>
       <dt>Programa</dt><dd>${esc(d.programa||'—')}</dd>
       <dt>Unidad responsable</dt><dd>${esc(d.unidad||'—')}</dd>
-      <dt>Responsable</dt><dd>${esc(d.responsable||'—')}${d.correoResponsable?` <span class="sub">${esc(d.correoResponsable)}</span>`:''}</dd>
+      <dt>Responsable</dt><dd>${esc(d.responsable||'—')}${d.cargoResponsable?` · ${esc(d.cargoResponsable)}`:''}${d.correoResponsable?` <span class="sub">${esc(d.correoResponsable)}</span>`:''}</dd>
+      <dt>Clase de documento</dt><dd>${esc(d.clase||'—')}${d.fuente?` · emite: ${esc(d.fuente)}`:''}</dd>
       <dt>Objetivo y alcance</dt><dd>${esc(d.objetivo||'—')}</dd>
       <dt>Cláusulas ISO 21001</dt><dd>${esc(d.clausulas||'—')}</dd>
       <dt>Aprobación</dt><dd>${fechaCorta(d.fechaAprobacion)} · ${esc(d.documentoAprobacion||'—')}</dd>
       <dt>Revisión</dt><dd>cada ${esc(d.frecuencia||'—')} meses · próxima ${etiRevision(d)}</dd>
       <dt>Distribución</dt><dd>${esc(d.distribucion)}</dd>
+      <dt>Medio y ubicación</dt><dd>${esc(d.medio||'—')}${d.ubicacion?` · ${esc(d.ubicacion)}`:''}</dd>
       <dt>Palabras clave</dt><dd>${esc(d.palabras||'—')}</dd>
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
@@ -881,7 +883,9 @@ function filaDeDocumento(d){
     'Frecuencia de revisión (meses)':d.frecuencia, 'Próxima revisión':d.proximaRevision,
     'Enlace documento':d.enlace, 'Enlace editable':d.enlaceEditable, 'Palabras clave':d.palabras,
     'Solicitud en curso':d.solicitudEnCurso, 'Fecha de baja':d.fechaBaja, 'Registrado por':d.registradoPor,
-    'Fecha de registro':d.fechaRegistro, 'Última actualización':d.actualizado };
+    'Fecha de registro':d.fechaRegistro, 'Última actualización':d.actualizado,
+    'Medio':d.medio, 'Ubicación':d.ubicacion, 'Clase de documento':d.clase, 'Fuente / emisor':d.fuente,
+    'Cargo del responsable':d.cargoResponsable };
 }
 function corregirDocumento(codigo){
   const d = (S.docs || []).find(x => x.codigo === codigo);
@@ -1034,14 +1038,24 @@ function camposDocumento(v){
       notaF('Persona que responde por el contenido. Es quien recibe los avisos cuando alguien observa el documento o se acerca su revisión.'))}
     ${campoF('Correo del responsable', `<input type="email" id="dCorreoResp" value="${esc(v.correoResponsable)}" placeholder="nombre.apellido@urp.edu.pe">`,
       notaF('A este correo llegan los avisos automáticos.'))}
+    ${campoF('Cargo del responsable', `<input type="text" id="dCargoResp" value="${esc(v.cargoResponsable)}" placeholder="Ej. Jefe de la Unidad de Calidad y Acreditación">`,
+      notaF('El <b>cargo</b>, no la persona: las personas cambian, el cargo queda. Lo pide el procedimiento FI-GCA-PR-001 v03.'))}
     ${campoF('Objetivo y alcance', `<textarea id="dObjetivo" placeholder="Para qué sirve el documento y a quién se aplica">${esc(v.objetivo)}</textarea>`,
       notaF('Dos o tres líneas: <b>para qué</b> existe el documento y <b>a quién o a qué</b> se aplica. Ej.: «Orientar a los docentes sobre sus responsabilidades en el SGOE; aplica a todos los docentes de la Facultad».'), {completo:true})}
     ${campoF('Cláusulas ISO 21001 relacionadas', `<div class="chips" id="dClausulas">${CLAUSULAS.map(c=>`<label><input type="checkbox" value="${esc(c)}" ${cl.includes(c)?'checked':''}>${esc(c)}</label>`).join('')}</div>`,
       notaF('Marca los capítulos de la norma que este documento ayuda a cumplir. Ej.: la Política de calidad responde a <b>5 Liderazgo</b>; un procedimiento de control de documentos, a <b>7.5 Información documentada</b>. Sirve para mostrar en una auditoría qué documento respalda cada requisito.'), {completo:true})}
     ${campoF('Origen', `<select id="dOrigen">${opciones(['Interno','Externo'],v.origen||'Interno')}</select>`,
       notaF('<b>Interno:</b> lo elaboró la Facultad. <b>Externo:</b> viene de otra entidad (ley universitaria, reglamento de la universidad, norma ISO) y el SGOE también debe controlar qué versión se usa.'))}
+    ${campoF('Clase de documento', `<select id="dClase">${opciones(['Del sistema','De proceso que afecta a otras áreas','Interno de un proceso','Externo'],v.clase,'Seleccione')}</select>`,
+      notaF('Según el procedimiento FI-GCA-PR-001 v03: <b>del sistema</b> (rige para toda la Facultad), <b>de un proceso que afecta a otras áreas</b>, <b>interno de un proceso</b> (no va a la Lista Maestra) o <b>externo</b>.'))}
+    ${campoF('Fuente / emisor', `<input type="text" id="dFuente" value="${esc(v.fuente)}" placeholder="Ej. SUNEDU, MINEDU, ISO">`,
+      notaF('Solo para documentos <b>externos</b>: quién lo emite.'))}
     ${campoF('Distribución', `<select id="dDistribucion">${opciones(['Pública interna','Restringida'],v.distribucion||'Pública interna')}</select>`,
       notaF('<b>Pública interna:</b> lo puede leer cualquier persona con cuenta @urp.edu.pe (docentes, administrativos). <b>Restringida:</b> solo quienes tienen un rol en el repositorio.'))}
+    ${campoF('Medio', `<select id="dMedio">${opciones(['Digital','Papel','Digital y papel'],v.medio||'Digital')}</select>`,
+      notaF('Cómo se conserva el documento: en digital, en papel o en ambos.'))}
+    ${campoF('Ubicación', `<input type="text" id="dUbicacion" value="${esc(v.ubicacion)}" placeholder="Ej. QuintaDB y archivo de la Unidad de Calidad">`,
+      notaF('Dónde se guarda, además del enlace. Si hay copia en papel, di en qué oficina está.'))}
     ${campoF('Frecuencia de revisión (meses)', `<input type="number" id="dFrecuencia" min="1" max="60" value="${esc(v.frecuencia||'24')}">`,
       notaF('Cada cuántos meses se debe revisar aunque nadie pida cambios. Lo usual: <b>12</b> para documentos que cambian seguido, <b>24</b> para políticas y guías. El sistema avisa 60 días antes.'), {req:true})}
     ${campoF('Palabras clave', `<input type="text" id="dPalabras" value="${esc(v.palabras)}" placeholder="docentes, sílabo, portafolio">`,
@@ -1056,7 +1070,9 @@ function leerCamposDocumento(){
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
     objetivo:$('dObjetivo').value.trim(), clausulas:[...document.querySelectorAll('#dClausulas input:checked')].map(i=>i.value).join('; '),
     origen:$('dOrigen').value, distribucion:$('dDistribucion').value, frecuencia:$('dFrecuencia').value, palabras:$('dPalabras').value.trim(),
-    enlaceEditable:$('dEditable').value.trim() };
+    enlaceEditable:$('dEditable').value.trim(),
+    cargoResponsable:$('dCargoResp').value.trim(), clase:$('dClase').value, fuente:$('dFuente').value.trim(),
+    medio:$('dMedio').value, ubicacion:$('dUbicacion').value.trim() };
 }
 function previoCodigo(){
   const el = $('codPrevio'); if (!el) return;
@@ -1186,7 +1202,7 @@ function abrirSolicitud(id){
   const s = S.sols.find(x=>x.id===id);
   if (!s) return aviso('Solicitud no disponible', true);
   const c = S.perfil.correo, doc = S.docs.find(d=>d.codigo===s.codigo);
-  const etiquetas = {titulo:'Título',tipo:'Tipo',proceso:'Proceso',programa:'Programa',unidad:'Unidad responsable',responsable:'Responsable',correoResponsable:'Correo responsable',objetivo:'Objetivo y alcance',clausulas:'Cláusulas ISO 21001',origen:'Origen',distribucion:'Distribución',frecuencia:'Frecuencia (meses)',palabras:'Palabras clave',enlaceEditable:'Formato editable'};
+  const etiquetas = {titulo:'Título',tipo:'Tipo',proceso:'Proceso',programa:'Programa',unidad:'Unidad responsable',responsable:'Responsable',correoResponsable:'Correo responsable',objetivo:'Objetivo y alcance',clausulas:'Cláusulas ISO 21001',origen:'Origen',distribucion:'Distribución',frecuencia:'Frecuencia (meses)',palabras:'Palabras clave',enlaceEditable:'Formato editable',cargoResponsable:'Cargo del responsable',clase:'Clase de documento',fuente:'Fuente / emisor',medio:'Medio',ubicacion:'Ubicación'};
   const datos = s.datos || {};
   const filas = s.tipo==='Anulación' ? '' : Object.keys(etiquetas).filter(k=>datos[k]!==undefined && datos[k]!=='').map(k => {
     const antes = doc ? String(doc[k]??'') : '', cambio = s.tipo==='Modificación' && antes !== String(datos[k]);
@@ -1516,6 +1532,11 @@ const DICC = {
     'Cláusulas ISO 21001':'Requisitos de la norma que este documento ayuda a cumplir. Sirve para demostrar el cumplimiento en una auditoría.',
     'Origen':'Interno: elaborado en la Facultad. Externo: ley, reglamento o norma de otra entidad que el SGOE también debe controlar.',
     'Distribución':'Pública interna: lo lee cualquier cuenta @urp.edu.pe. Restringida: solo quienes tienen un rol en el repositorio.',
+    'Medio':'Cómo se conserva el documento: digital, papel o ambos (FI-GCA-PR-001 v03).',
+    'Ubicación':'Dónde se guarda el documento, además del enlace (FI-GCA-PR-001 v03).',
+    'Clase de documento':'Del sistema, de un proceso que afecta a otras áreas, interno de un proceso (no va a la Lista Maestra) o externo.',
+    'Fuente / emisor':'Solo documentos externos: quién lo emite (SUNEDU, MINEDU, ISO…).',
+    'Cargo del responsable':'Cargo de quien responde por el documento, no la persona.',
     'Versión vigente':'Número de la versión oficial actual. Sube en 1 (2.0) si cambia el contenido y en 0.1 (1.1) si solo cambia la forma.',
     'Estado':'Vigente: es el documento oficial. Obsoleto: se dio de baja y queda solo como referencia histórica.',
     'Fecha de aprobación':'Fecha en que se aprobó la versión vigente.',
@@ -1679,6 +1700,11 @@ const FICHAS = {
       'Objetivo y alcance':{ tipo:'area' },
       'Cláusulas ISO 21001':{ tipo:'texto', nota:'Separadas por punto y coma: «5 Liderazgo; 7.5 Información documentada».' },
       'Distribución':{ tipo:'lista', opciones:['Pública interna','Restringida'] },
+      'Cargo del responsable':{ tipo:'texto', nota:'El cargo, no la persona. Ej.: Jefe de la Unidad de Calidad y Acreditación.' },
+      'Clase de documento':{ tipo:'lista', opciones:['Del sistema','De proceso que afecta a otras áreas','Interno de un proceso','Externo'] },
+      'Fuente / emisor':{ tipo:'texto', nota:'Solo documentos externos: quién lo emite.' },
+      'Medio':{ tipo:'lista', opciones:['Digital','Papel','Digital y papel'] },
+      'Ubicación':{ tipo:'texto', nota:'Dónde se guarda, además del enlace.' },
       'Frecuencia de revisión (meses)':{ tipo:'numero', nota:'Al cambiarla, el sistema recalcula la próxima revisión desde la fecha de aprobación.' },
       'Documento de aprobación':{ tipo:'texto' },
       'Enlace documento':{ tipo:'url', nota:'Archivo oficial en Drive, compartido con urp.edu.pe como lector. Si el visor sale en blanco, casi siempre es porque el archivo no está compartido.' },
@@ -2033,6 +2059,8 @@ async function guardarAdmin(t, recordId){
           frecuencia:r.fila['Frecuencia de revisión (meses)'], proximaRevision:r.fila['Próxima revisión'],
           documentoAprobacion:r.fila['Documento de aprobación'], enlace:r.fila['Enlace documento'],
           enlaceEditable:r.fila['Enlace editable'], palabras:r.fila['Palabras clave'],
+          medio:r.fila['Medio'], ubicacion:r.fila['Ubicación'], clase:r.fila['Clase de documento'],
+          fuente:r.fila['Fuente / emisor'], cargoResponsable:r.fila['Cargo del responsable'],
           actualizado:r.fila['Última actualización'] }) : x);
       }
       if (t === 'registros' && S.registros){
