@@ -370,6 +370,8 @@ const CFG = window.RIID_CONFIG;
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
 const BACKEND_ESPERADO = '2026-10-12a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
+/* A quién escribe la persona que no tiene acceso todavía. */
+const CORREO_ACCESO = 'patrick.villanueva@urp.edu.pe';
 const CLAUSULAS = ['4 Contexto','5 Liderazgo','6 Planificación','7 Apoyo','7.5 Información documentada','8 Operación','9 Evaluación del desempeño','10 Mejora'];
 const TIPOS_OBS = ['Observación','Recomendación','Oportunidad de mejora','No conformidad','Conformidad'];
 const DISPOSICION = ['Evaluar al vencer','Eliminar','Transferir a archivo central','Conservación permanente'];
@@ -628,6 +630,15 @@ async function entrar(){
   $('errorAcceso').textContent='';
   try{
     await recargar();
+    // Acceso cerrado: solo entra quien está registrado en la tabla Usuarios.
+    // Tener cuenta @urp.edu.pe ya no basta.
+    if (!S.perfil.enPadron){
+      sessionStorage.removeItem('riid_cred'); S.cred='';
+      if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
+      $('errorAcceso').innerHTML = `Tu cuenta <b>${esc(S.perfil.correo||'')}</b> no tiene acceso al repositorio.`
+        + `<br>El acceso se otorga por registro: escribe a <a href="mailto:${CORREO_ACCESO}?subject=Acceso%20al%20RID-SGOE">${CORREO_ACCESO}</a> indicando tu nombre, cargo y el proceso en el que trabajas.`;
+      return;
+    }
     $('pantallaAcceso').classList.add('oculto'); $('aplicacion').classList.remove('oculto');
     $('uNombre').textContent = S.perfil.nombre;
     $('uRol').textContent = S.perfil.roles.join(' · ');
@@ -646,6 +657,14 @@ async function recargar(){
   if (d.registros) S.registros = d.registros;   // llegan con el inicio: la pestaña abre sin esperar
   Object.assign(S, { perfil:d.perfil, cat:d.catalogos, cand:d.candidatos, docs:d.documentos, sols:d.solicitudes,
     obsAbiertas:d.observacionesAbiertas, totalReg:d.totalRegistros, hoy:d.hoy, prefijo:d.prefijo });
+  if (S.perfil){
+    // Dos cosas distintas que antes eran una sola:
+    //   enPadron   → figura en la tabla Usuarios; es lo que abre la puerta del repositorio.
+    //   registrado → tiene algún permiso, o sea participa y no solo consulta. El rol
+    //                Lector entra (está en el padrón) pero navega en modo consulta.
+    S.perfil.enPadron = !!S.perfil.registrado;
+    S.perfil.registrado = Object.values(S.perfil.puede || {}).some(Boolean);
+  }
   S.backend = d.backend || '';
   if (S.backend < BACKEND_ESPERADO) mostrarAvisoVersion(S.backend); else ocultarAvisoVersion();
   const pend = pendientes().length;
@@ -816,14 +835,13 @@ function pintarFicha(pestana){
       <dt>Programa</dt><dd>${esc(d.programa||'—')}</dd>
       <dt>Unidad responsable</dt><dd>${esc(d.unidad||'—')}</dd>
       <dt>Responsable</dt><dd>${esc(d.responsable||'—')}${d.cargoResponsable?` · ${esc(d.cargoResponsable)}`:''}${d.correoResponsable?` <span class="sub">${esc(d.correoResponsable)}</span>`:''}</dd>
-      <dt>Clase de documento</dt><dd>${esc(d.clase||'—')}${d.fuente?` · emite: ${esc(d.fuente)}`:''}</dd>
+      ${d.fuente?`<dt>Emite</dt><dd>${esc(d.fuente)}</dd>`:''}
       <dt>Objetivo y alcance</dt><dd>${esc(d.objetivo||'—')}</dd>
       <dt>Cláusulas ISO 21001</dt><dd>${esc(d.clausulas||'—')}</dd>
       <dt>Aprobación</dt><dd>${fechaCorta(d.fechaAprobacion)} · ${esc(d.documentoAprobacion||'—')}</dd>
       <dt>Revisión</dt><dd>cada ${esc(d.frecuencia||'—')} meses · próxima ${etiRevision(d)}</dd>
       <dt>Distribución</dt><dd>${esc(d.distribucion)}</dd>
-      <dt>Medio y ubicación</dt><dd>${esc(d.medio||'—')}${d.ubicacion?` · ${esc(d.ubicacion)}`:''}</dd>
-      <dt>Palabras clave</dt><dd>${esc(d.palabras||'—')}</dd>
+      <dt>Medio</dt><dd>${esc(d.medio||'Digital')}</dd>
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
   if (pestana==='versiones') cuerpo = versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
@@ -1018,7 +1036,10 @@ const campoF = (etiqueta, control, notaHtml, o = {}) =>
   `<div class="campo${o.completo?' completo':''}"><label${o.req?' class="req"':''}>${etiqueta}</label>${control}${notaHtml||''}</div>`;
 const notaF = html => `<div class="nota-campo">${html}</div>`;
 
+let DOC_OCULTO = {};   // valores que el formulario ya no muestra pero debe preservar
 function camposDocumento(v){
+  DOC_OCULTO = { objetivo:v.objetivo, clausulas:v.clausulas, frecuencia:v.frecuencia, palabras:v.palabras,
+    enlaceEditable:v.enlaceEditable, clase:v.clase, ubicacion:v.ubicacion };
   iniciarCascada(v.proceso);
   setTimeout(pintarCascada, 0);
   const cl = (v.clausulas||'').split(';').map(x=>x.trim());
@@ -1040,39 +1061,28 @@ function camposDocumento(v){
       notaF('A este correo llegan los avisos automáticos.'))}
     ${campoF('Cargo del responsable', `<input type="text" id="dCargoResp" value="${esc(v.cargoResponsable)}" placeholder="Ej. Jefe de la Unidad de Calidad y Acreditación">`,
       notaF('El <b>cargo</b>, no la persona: las personas cambian, el cargo queda. Lo pide el procedimiento FI-GCA-PR-001 v03.'))}
-    ${campoF('Objetivo y alcance', `<textarea id="dObjetivo" placeholder="Para qué sirve el documento y a quién se aplica">${esc(v.objetivo)}</textarea>`,
-      notaF('Dos o tres líneas: <b>para qué</b> existe el documento y <b>a quién o a qué</b> se aplica. Ej.: «Orientar a los docentes sobre sus responsabilidades en el SGOE; aplica a todos los docentes de la Facultad».'), {completo:true})}
-    ${campoF('Cláusulas ISO 21001 relacionadas', `<div class="chips" id="dClausulas">${CLAUSULAS.map(c=>`<label><input type="checkbox" value="${esc(c)}" ${cl.includes(c)?'checked':''}>${esc(c)}</label>`).join('')}</div>`,
-      notaF('Marca los capítulos de la norma que este documento ayuda a cumplir. Ej.: la Política de calidad responde a <b>5 Liderazgo</b>; un procedimiento de control de documentos, a <b>7.5 Información documentada</b>. Sirve para mostrar en una auditoría qué documento respalda cada requisito.'), {completo:true})}
     ${campoF('Origen', `<select id="dOrigen">${opciones(['Interno','Externo'],v.origen||'Interno')}</select>`,
       notaF('<b>Interno:</b> lo elaboró la Facultad. <b>Externo:</b> viene de otra entidad (ley universitaria, reglamento de la universidad, norma ISO) y el SGOE también debe controlar qué versión se usa.'))}
-    ${campoF('Clase de documento', `<select id="dClase">${opciones(['Del sistema','De proceso que afecta a otras áreas','Interno de un proceso','Externo'],v.clase,'Seleccione')}</select>`,
-      notaF('Según el procedimiento FI-GCA-PR-001 v03: <b>del sistema</b> (rige para toda la Facultad), <b>de un proceso que afecta a otras áreas</b>, <b>interno de un proceso</b> (no va a la Lista Maestra) o <b>externo</b>.'))}
     ${campoF('Fuente / emisor', `<input type="text" id="dFuente" value="${esc(v.fuente)}" placeholder="Ej. SUNEDU, MINEDU, ISO">`,
       notaF('Solo para documentos <b>externos</b>: quién lo emite.'))}
     ${campoF('Distribución', `<select id="dDistribucion">${opciones(['Pública interna','Restringida'],v.distribucion||'Pública interna')}</select>`,
-      notaF('<b>Pública interna:</b> lo puede leer cualquier persona con cuenta @urp.edu.pe (docentes, administrativos). <b>Restringida:</b> solo quienes tienen un rol en el repositorio.'))}
-    ${campoF('Medio', `<select id="dMedio">${opciones(['Digital','Papel','Digital y papel'],v.medio||'Digital')}</select>`,
-      notaF('Cómo se conserva el documento: en digital, en papel o en ambos.'))}
-    ${campoF('Ubicación', `<input type="text" id="dUbicacion" value="${esc(v.ubicacion)}" placeholder="Ej. QuintaDB y archivo de la Unidad de Calidad">`,
-      notaF('Dónde se guarda, además del enlace. Si hay copia en papel, di en qué oficina está.'))}
-    ${campoF('Frecuencia de revisión (meses)', `<input type="number" id="dFrecuencia" min="1" max="60" value="${esc(v.frecuencia||'24')}">`,
-      notaF('Cada cuántos meses se debe revisar aunque nadie pida cambios. Lo usual: <b>12</b> para documentos que cambian seguido, <b>24</b> para políticas y guías. El sistema avisa 60 días antes.'), {req:true})}
-    ${campoF('Palabras clave', `<input type="text" id="dPalabras" value="${esc(v.palabras)}" placeholder="docentes, sílabo, portafolio">`,
-      notaF('Términos por los que alguien buscaría este documento, separados por comas.'))}
-    ${campoF('Enlace al archivo editable (Drive)', `<input type="url" id="dEditable" value="${esc(v.enlaceEditable)}" placeholder="https://docs.google.com/document/d/...">`,
-      notaF('Opcional. El Word o Google Doc con el que se trabajarán las próximas versiones. Solo lo ven los usuarios con rol.'), {completo:true})}
+      notaF('Hasta dónde puede circular el documento, no quién entra al repositorio (al repositorio solo entra quien está registrado). <b>Pública interna:</b> se puede compartir con cualquier persona de la URP. <b>Restringida:</b> solo con quienes tienen un rol en el repositorio.'))}
+    ${campoF('Medio', `<select id="dMedio">${opciones(['Digital','Digital y físico'],v.medio||'Digital')}</select>`,
+      notaF('<b>Digital</b> (lo habitual): el archivo vive en el repositorio. <b>Digital y físico</b>: además existe un original firmado en papel.'))}
   </div>`;
 }
 function leerCamposDocumento(){
   if (!CASC.some(e => e.i >= 1)) throw new Error('Elige el proceso al menos hasta el «Proceso nivel 0».');
   return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value, proceso:$('dProceso').value, programa:$('dPrograma').value,
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
-    objetivo:$('dObjetivo').value.trim(), clausulas:[...document.querySelectorAll('#dClausulas input:checked')].map(i=>i.value).join('; '),
-    origen:$('dOrigen').value, distribucion:$('dDistribucion').value, frecuencia:$('dFrecuencia').value, palabras:$('dPalabras').value.trim(),
-    enlaceEditable:$('dEditable').value.trim(),
-    cargoResponsable:$('dCargoResp').value.trim(), clase:$('dClase').value, fuente:$('dFuente').value.trim(),
-    medio:$('dMedio').value, ubicacion:$('dUbicacion').value.trim() };
+    // Campos retirados del formulario: se conservan tal como estaban (se editan
+    // directamente en QuintaDB), nunca se vacían al guardar.
+    objetivo:DOC_OCULTO.objetivo||'', clausulas:DOC_OCULTO.clausulas||'',
+    frecuencia:DOC_OCULTO.frecuencia||'24', palabras:DOC_OCULTO.palabras||'',
+    enlaceEditable:DOC_OCULTO.enlaceEditable||'', clase:DOC_OCULTO.clase||'', ubicacion:DOC_OCULTO.ubicacion||'',
+    origen:$('dOrigen').value, distribucion:$('dDistribucion').value,
+    cargoResponsable:$('dCargoResp').value.trim(), fuente:$('dFuente').value.trim(),
+    medio:$('dMedio').value };
 }
 function previoCodigo(){
   const el = $('codPrevio'); if (!el) return;
@@ -1650,7 +1660,8 @@ const DESC_ROLES = {
   'Aprobador':'Aparece en la lista de aprobadores. Aprueba, observa o rechaza las solicitudes que se le asignan.',
   'Revisor':'Aparece en la lista de revisores. Da conformidad u observa las solicitudes que se le asignan.',
   'Responsable de proceso':'Pide la creación, modificación o baja de los documentos de sus procesos y registra evidencias.',
-  'Registrador':'Solo registra evidencias (actas, listas, informes).'
+  'Registrador':'Solo registra evidencias (actas, listas, informes).',
+  'Lector':'Solo consulta: ve la lista maestra, abre las fichas y descarga los documentos vigentes. No solicita, no registra, no revisa ni aprueba. Es el rol para dar acceso de lectura a quien necesita consultar el repositorio.'
 };
 
 const FICHAS = {
@@ -1673,7 +1684,7 @@ const FICHAS = {
   },
   usuarios: {
     titulo:'Usuarios y roles',
-    finalidad:'Define <b>quién puede hacer qué</b>. Cualquier persona con cuenta @urp.edu.pe entra al repositorio como <b>lector</b> sin estar aquí. Esta tabla solo se usa para dar permisos adicionales. <br><b>De aquí salen las listas «Revisor» y «Aprobador»</b> de los formularios: aparece como revisor quien tenga rol Revisor o Controlador documental, y como aprobador quien tenga rol Aprobador. Si una persona tiene dos roles, lleva dos filas.',
+    finalidad:'Define <b>quién entra y quién puede hacer qué</b>. El acceso al repositorio es cerrado: <b>solo entra quien figura en esta tabla</b>. Tener cuenta @urp.edu.pe no basta. Para dar únicamente acceso de consulta, registra a la persona con el rol <b>Lector</b>. <br><b>De aquí salen las listas «Revisor» y «Aprobador»</b> de los formularios: aparece como revisor quien tenga rol Revisor o Controlador documental, y como aprobador quien tenga rol Aprobador. Si una persona tiene dos roles, lleva dos filas.',
     mostrar:['Nombre','Correo','Rol','Procesos','Estado'],
     nombreFila:'usuario',
     campos:{
@@ -1697,19 +1708,12 @@ const FICHAS = {
       'Unidad responsable':{ tipo:'texto' },
       'Responsable':{ tipo:'texto' },
       'Correo responsable':{ tipo:'correo' },
-      'Objetivo y alcance':{ tipo:'area' },
-      'Cláusulas ISO 21001':{ tipo:'texto', nota:'Separadas por punto y coma: «5 Liderazgo; 7.5 Información documentada».' },
       'Distribución':{ tipo:'lista', opciones:['Pública interna','Restringida'] },
       'Cargo del responsable':{ tipo:'texto', nota:'El cargo, no la persona. Ej.: Jefe de la Unidad de Calidad y Acreditación.' },
-      'Clase de documento':{ tipo:'lista', opciones:['Del sistema','De proceso que afecta a otras áreas','Interno de un proceso','Externo'] },
       'Fuente / emisor':{ tipo:'texto', nota:'Solo documentos externos: quién lo emite.' },
-      'Medio':{ tipo:'lista', opciones:['Digital','Papel','Digital y papel'] },
-      'Ubicación':{ tipo:'texto', nota:'Dónde se guarda, además del enlace.' },
-      'Frecuencia de revisión (meses)':{ tipo:'numero', nota:'Al cambiarla, el sistema recalcula la próxima revisión desde la fecha de aprobación.' },
+      'Medio':{ tipo:'lista', opciones:['Digital','Digital y físico'] },
       'Documento de aprobación':{ tipo:'texto' },
       'Enlace documento':{ tipo:'url', nota:'Archivo oficial en Drive, compartido con urp.edu.pe como lector. Si el visor sale en blanco, casi siempre es porque el archivo no está compartido.' },
-      'Enlace editable':{ tipo:'url' },
-      'Palabras clave':{ tipo:'texto' }
     }
   },
   registros: {
