@@ -1085,6 +1085,15 @@ function siguienteVersion(actual){
   return (Math.floor(v)+1).toFixed(1);
 }
 
+/* Procesos de nivel 0: son los que aportan su código al código del documento
+   (el GCA de FI-GCA-PL-001). Se leen del inventario de la Matriz de Indicadores
+   y, si ese no responde, del catálogo propio. */
+function procesosNivel0(){
+  const p = (S.cat && S.cat.procesos) || [];
+  const raiz = p.filter(x => (x.nivel||0) === 0);
+  return (raiz.length ? raiz : p).map(x => ({ codigo:x.codigo, nombre:x.nombre }));
+}
+
 let DOC_OCULTO = {};   // valores que el formulario ya no muestra pero debe preservar
 function camposDocumento(v){
   DOC_OCULTO = { objetivo:v.objetivo, clausulas:v.clausulas, frecuencia:v.frecuencia, palabras:v.palabras,
@@ -1096,6 +1105,9 @@ function camposDocumento(v){
       notaF('Nombre oficial, <b>sin el código</b>. Escríbelo como aparecerá en la carátula. No puede repetir el título de otro documento vigente.'), {req:true, completo:true})}
     ${campoF('Tipo de documento', `<select id="dTipo" onchange="previoCodigo()">${opciones(S.cat.tipos.map(t=>({v:t.nombre,t:`${t.nombre} (${t.codigo})`})),v.tipo,'Seleccione')}</select>`,
       origenLista('Tipo de documento'), {req:true})}
+    ${campoF('Proceso', `<select id="dProceso" onchange="previoCodigo()">${opciones(
+        procesosNivel0().map(p=>({v:p.nombre, t:`${p.codigo} · ${p.nombre}`})), DOC_OCULTO.proceso||'', 'Seleccione')}</select>`,
+      notaF('El proceso dueño del documento. Su código entra en el código del documento, tal como lo pide el procedimiento: <b>FI-<u>GCA</u>-PL-001</b>. Solo se elige el proceso principal; no hace falta bajar por niveles.') + origenLista('Proceso'), {req:true})}
     ${campoF('Programa', `<select id="dPrograma">${opciones(S.cat.programas.map(x=>x.nombre),v.programa,'Seleccione')}</select>`,
       origenLista('Programa'))}
     ${campoF('Unidad responsable', `<input type="text" id="dUnidad" value="${esc(v.unidad)}" placeholder="Ej. Comisión de Calidad FI">`,
@@ -1118,9 +1130,7 @@ function camposDocumento(v){
 }
 function leerCamposDocumento(){
   return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value,
-    // El proceso salió del formulario: el que ya tenía el documento se conserva,
-    // y los nuevos nacen sin proceso (se asigna en QuintaDB si hace falta).
-    proceso:DOC_OCULTO.proceso||'', programa:$('dPrograma').value,
+    proceso:($('dProceso') ? $('dProceso').value : (DOC_OCULTO.proceso||'')), programa:$('dPrograma').value,
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
     // Campos retirados del formulario: se conservan tal como estaban (se editan
     // directamente en QuintaDB), nunca se vacían al guardar.
@@ -1135,8 +1145,10 @@ function previoCodigo(){
   const el = $('codPrevio'); if (!el) return;
   const t = S.cat.tipos.find(x=>x.nombre===$('dTipo').value);
   if (!t){ el.textContent = 'Elige el tipo de documento'; return; }
-  const raiz = codigoTramo(segsDe(DOC_OCULTO.proceso||'')[1]);
-  const base = `${S.prefijo}-${t.codigo}-${raiz?raiz+'-':''}`;
+  const pr = $('dProceso') ? procesosNivel0().find(x=>x.nombre===$('dProceso').value) : null;
+  if (!pr){ el.textContent = 'Elige el proceso y el tipo'; return; }
+  // Mismo orden que el procedimiento: prefijo · proceso · tipo · correlativo.
+  const base = `${S.prefijo}-${pr.codigo}-${t.codigo}-`;
   const usados = S.docs.map(d=>d.codigo).concat(S.sols.map(s=>s.codigo)).filter(c=>c.startsWith(base)).map(c=>parseInt(c.slice(base.length))||0);
   el.textContent = base + String(Math.max(0,...usados)+1).padStart(3,'0');
 }
