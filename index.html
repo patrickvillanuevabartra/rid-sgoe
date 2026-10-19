@@ -55,6 +55,14 @@ main{max-width:1240px;margin:0 auto;padding:20px}
   border-radius:9px;padding:10px 14px;font-size:17px;color:var(--brand-oscuro)}
 .salto-version .flecha{opacity:.65}
 .salto-version b{font-size:19px}
+.carga-archivo{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.lista-archivos{flex-basis:100%;display:flex;flex-direction:column;gap:5px;margin-top:4px}
+.arch-fila{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--brand-suave);
+  border-radius:8px;padding:6px 11px;font-size:14.5px}
+.arch-fila .arch-pos{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:#fff;background:var(--brand);border-radius:20px;padding:2px 9px;min-width:26px;text-align:center}
+.arch-fila a{color:var(--brand-oscuro)}
+.arch-fila a.quitar{color:var(--falla)}
 .btn.n{background:transparent;color:var(--tinta-media);border-color:var(--linea)}
 .btn.rojo{background:var(--falla);border-color:var(--falla)}
 .btn.ambar{background:var(--parcial);border-color:var(--parcial)}
@@ -592,7 +600,14 @@ async function api(ruta, cuerpo, intento){
   } finally { cargando(false); }
 }
 
+/* Un campo de enlace puede guardar varios archivos separados por « | ».
+   El primero es el principal: es el que se muestra en el visor. */
+const SEP_ARCHIVOS = ' | ';
+function listaEnlaces(v){ return String(v||'').split('|').map(x=>x.trim()).filter(Boolean); }
+function enlacePrincipal(v){ return listaEnlaces(v)[0] || ''; }
+
 function vistaPrevia(url){
+  url = enlacePrincipal(url);
   if(!url) return '';
   let m = /drive\.google\.com\/file\/d\/([\w-]+)/.exec(url) || /[?&]id=([\w-]+)/.exec(url);
   if (m && /google\.com/.test(url)) return `https://drive.google.com/file/d/${m[1]}/preview`;
@@ -904,7 +919,7 @@ function pintarFicha(pestana){
     </div>
     <div class="modal-pie">
       <span class="sub" style="margin-right:auto;align-self:center">Toda copia impresa o descargada es copia no controlada.</span>
-      ${d.enlace?`<a class="btn n" href="${esc(d.enlace)}" target="_blank" rel="noopener">Abrir documento</a>`:''}
+      ${listaEnlaces(d.enlace).map((u,i)=>`<a class="btn n" href="${esc(u)}" target="_blank" rel="noopener">${i?'Anexo '+i:'Abrir documento'}</a>`).join('')}
       ${d.enlaceEditable && reg?`<a class="btn n" href="${esc(d.enlaceEditable)}" target="_blank" rel="noopener">Formato editable</a>`:''}
       <button class="btn n" onclick="pintarFicha('ficha');setTimeout(()=>window.print(),150)">Imprimir ficha</button>
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
@@ -1139,13 +1154,20 @@ function selectorFlujo(){
    URL que este devuelve. El input con el id de siempre se conserva oculto,
    porque todo lo demás sigue leyendo su valor: lo único que cambia es que esa
    URL ya no se pega a mano. */
-const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png';
+const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip';
+/* Tope real de la cadena navegador → Worker → Apps Script → QuintaDB.
+   El archivo viaja codificado en base64, que lo engorda un tercio, y Apps
+   Script no aguanta mucho más que esto sin agotarse. Por encima, el campo
+   sigue aceptando un enlace de Drive pegado a mano. */
+const MAX_MB = 25;
 function campoArchivo(id, etiqueta, nota, o = {}){
   return campoF(etiqueta,
     `<div class="carga-archivo">
-       <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" style="display:none" onchange="subirArchivo('${id}','${o.origen||'documento'}')">
-       <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivo</button>
+       <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none"
+         onchange="subirArchivos('${id}','${o.origen||'documento'}')">
+       <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
        <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
+       <div class="lista-archivos" id="${id}_lista"></div>
        <input type="hidden" id="${id}" value="">
      </div>`, nota, o);
 }
@@ -1155,31 +1177,54 @@ function leerBase64(f){
     l.onerror = () => mal(new Error('No se pudo leer el archivo desde tu computadora.'));
     l.readAsDataURL(f); });
 }
-async function subirArchivo(id, origen){
-  const inp = $(id+'_file'), est = $(id+'_estado'), btn = $(id+'_btn');
-  const f = inp.files && inp.files[0]; if (!f) return;
-  const mb = f.size / 1048576;
-  if (mb > 10){
-    est.innerHTML = `<b style="color:var(--falla)">Pesa ${mb.toFixed(1)} MB y el máximo es 10 MB.</b> Comprímelo e inténtalo de nuevo.`;
-    inp.value = ''; return;
-  }
-  btn.disabled = true; est.textContent = `Subiendo ${f.name}…`;
-  try{
-    const base64 = await leerBase64(f);
-    const r = await api('/archivo', { nombre:f.name, base64, origen:origen||'documento', codigo:($('dTitulo')?$('dTitulo').value.trim():'') });
-    $(id).value = r.url;
-    est.innerHTML = `✔ <b>${esc(r.nombre)}</b> (${r.mb} MB) · <a href="${esc(r.url)}" target="_blank" rel="noopener">ver archivo</a> · <a href="#" onclick="quitarArchivo('${id}');return false">quitar</a>`;
-  }catch(e){
-    est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(e.message)}`;
-    inp.value = '';
-  }finally{ btn.disabled = false; }
+/* Lo cargado en cada campo: [{nombre, url, mb}]. El primero es el principal. */
+const ARCHIVOS = {};
+function pintarArchivos(id){
+  const lista = ARCHIVOS[id] || [];
+  $(id).value = lista.map(a => a.url).join(SEP_ARCHIVOS);
+  $(id+'_estado').textContent = lista.length
+    ? `${lista.length} archivo${lista.length>1?'s':''} · el primero es el que se ve en el visor`
+    : 'Ningún archivo cargado todavía';
+  $(id+'_lista').innerHTML = lista.map((a,i) => `<div class="arch-fila">
+      <span class="arch-pos">${i===0?'principal':i+1}</span>
+      <b>${esc(a.nombre)}</b> <span class="sub">${a.mb} MB</span>
+      <a href="${esc(a.url)}" target="_blank" rel="noopener">ver</a>
+      ${i>0?`<a href="#" onclick="primerArchivo('${id}',${i});return false">hacer principal</a>`:''}
+      <a href="#" class="quitar" onclick="quitarArchivo('${id}',${i});return false">quitar</a>
+    </div>`).join('');
 }
-function quitarArchivo(id){
-  $(id).value = ''; $(id+'_file').value = '';
-  $(id+'_estado').textContent = 'Ningún archivo cargado todavía';
+async function subirArchivos(id, origen){
+  const inp = $(id+'_file'), est = $(id+'_estado'), btn = $(id+'_btn');
+  const elegidos = [...(inp.files||[])]; if (!elegidos.length) return;
+  ARCHIVOS[id] = ARCHIVOS[id] || [];
+  btn.disabled = true;
+  const fallos = [];
+  for (let n = 0; n < elegidos.length; n++){
+    const f = elegidos[n], mb = f.size / 1048576;
+    est.textContent = `Subiendo ${f.name} (${n+1} de ${elegidos.length})…`;
+    if (mb > MAX_MB){ fallos.push(`${f.name}: pesa ${mb.toFixed(1)} MB y el máximo es ${MAX_MB} MB`); continue; }
+    try{
+      const base64 = await leerBase64(f);
+      const r = await api('/archivo', { nombre:f.name, base64, origen:origen||'documento',
+        codigo:($('dTitulo')?$('dTitulo').value.trim():'') });
+      ARCHIVOS[id].push({ nombre:r.nombre, url:r.url, mb:r.mb });
+      pintarArchivos(id);
+    }catch(e){ fallos.push(`${f.name}: ${e.message}`); }
+  }
+  inp.value = ''; btn.disabled = false;
+  pintarArchivos(id);
+  if (fallos.length) est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(fallos.join(' · '))}`;
+}
+function quitarArchivo(id, i){
+  if (i === undefined) ARCHIVOS[id] = []; else (ARCHIVOS[id]||[]).splice(i, 1);
+  $(id+'_file').value = ''; pintarArchivos(id);
+}
+function primerArchivo(id, i){
+  const l = ARCHIVOS[id] || []; if (!l[i]) return;
+  l.unshift(l.splice(i, 1)[0]); pintarArchivos(id);
 }
 const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
-  notaF('Pulsa <b>Cargar archivo</b> y elige el borrador desde tu computadora. Se sube al repositorio y el revisor lo abre desde aquí: ya no hace falta subirlo a Drive ni compartirlo. Formatos: PDF, Word, Excel, PowerPoint o imagen. Máximo 10 MB.'),
+  notaF('Pulsa <b>Cargar archivos</b> y elige el borrador desde tu computadora. Se sube al repositorio y el revisor lo abre desde aquí: ya no hace falta subirlo a Drive ni compartirlo. Puedes elegir <b>varios archivos a la vez</b>; el primero es el que se abre en el visor y el orden se puede cambiar. Formatos: PDF, Word, Excel, PowerPoint, imagen o ZIP. Máximo 25 MB por archivo.'),
   {req:true, completo:true, origen:'borrador'});
 
 function formDocumento(modo, codigo){
@@ -1223,7 +1268,7 @@ function formDocumento(modo, codigo){
         ${campoF('Revisó', `<input type="text" id="eReviso">`, notaF('Quién lo revisó, si se sabe.'))}
         ${campoF('Aprobó', `<input type="text" id="eAprobo">`, notaF('Autoridad que lo aprobó.'))}
         ${campoArchivo('eEnlace', 'Archivo del documento aprobado',
-          notaF('El PDF firmado. Se sube al repositorio y es lo que se verá en el visor. Máximo 10 MB.'), {completo:true, origen:'documento'})}
+          notaF('El PDF firmado. Si el documento viene con anexos, cárgalos aquí también: el primero de la lista es el que se verá en el visor. Máximo 25 MB por archivo.'), {completo:true, origen:'documento'})}
       </div><h3 class="sec-form">Ficha del documento</h3>${camposDocumento({})}`;
   }
   modal(`<div class="modal-cab"><h2 style="flex:1">${esc(titulo)}</h2><button class="cerrar" onclick="cerrarModal()">×</button></div>
@@ -1310,7 +1355,7 @@ function abrirSolicitud(id){
       <div class="campo"><label>Fecha de aprobación</label><input type="date" id="aFecha" value="${S.hoy}">
         <div class="nota-campo">La fecha del documento de aprobación. Desde ella se cuenta la próxima revisión.</div></div>
       ${s.tipo!=='Anulación'?campoArchivo('aEnlace', 'Archivo final del documento aprobado',
-        notaF('Si ya tienes el PDF firmado, cárgalo aquí. Si lo dejas vacío, queda como oficial el borrador revisado.'), {completo:true, origen:'documento'}):''}
+        notaF('Si ya tienes el PDF firmado, cárgalo aquí (y sus anexos, si los hay). Si lo dejas vacío, queda como oficial el borrador revisado.'), {completo:true, origen:'documento'}):''}
       <div class="campo completo"><label>Comentario</label><textarea id="aCom" placeholder="Obligatorio si observas o rechazas"></textarea>
         <div class="nota-campo">Si observas o rechazas, explica el motivo: el solicitante lo recibirá por correo.</div></div>
     </div>
@@ -1334,7 +1379,7 @@ function abrirSolicitud(id){
       <div class="panel"><div class="panel-cuerpo">
         <dl class="meta"><dt>Solicitante</dt><dd>${esc(s.solicitante)}</dd><dt>Revisor</dt><dd>${esc(s.revisor)}</dd><dt>Aprobador</dt><dd>${esc(s.aprobador)}</dd>
         ${s.tipoCambio?`<dt>Tipo de cambio</dt><dd>${esc(s.tipoCambio)}</dd>`:''}<dt>Justificación</dt><dd>${esc(s.justificacion)}</dd>${filas}
-        ${s.enlaceBorrador?`<dt>Borrador</dt><dd><a href="${esc(s.enlaceBorrador)}" target="_blank" rel="noopener">abrir</a></dd>`:''}</dl>
+        ${s.enlaceBorrador?`<dt>Borrador</dt><dd>${listaEnlaces(s.enlaceBorrador).map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">${i?'anexo '+i:'abrir'}</a>`).join(' · ')}</dd>`:''}</dl>
         <h3 style="font-size:13px;margin:16px 0 8px">Historial</h3>
         <div class="linea-tiempo">${s.historial.map(h=>`<div class="hito"><div class="h-cab"><b>${esc(h.accion)}</b> <span class="sub">${esc(h.nombre)} · ${fechaCorta(h.fecha)}</span></div>${h.comentario?`<div class="h-txt">${esc(h.comentario)}</div>`:''}</div>`).join('')}</div>
         ${acciones?`<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:12px">${acciones}</div>`:''}
@@ -1468,7 +1513,7 @@ function filaRegistro(r){
     <td>${g==='Programa'?'':esc(r.programa)}${g==='Periodo'?'':`<div class="sub">${esc(r.periodo)}</div>`}${g==='Programa'&&g==='Periodo'?'<span class="sub">—</span>':''}</td><td style="max-width:340px">${esc(r.descripcion)}</td>
     <td>${vencido?`<span class="eti e-vencida">${fechaCorta(r.conservarHasta)}</span>`:`<span class="mono sub">${fechaCorta(r.conservarHasta)}</span>`}<div class="sub">${esc(r.disposicion)}</div></td>
     <td class="sub">${esc(r.registradoPor)}<br>${fechaCorta(r.fecha)}</td>
-    <td style="white-space:nowrap"><a class="btn g sm" href="${esc(r.enlace)}" target="_blank" rel="noopener">Abrir</a>
+    <td style="white-space:nowrap"><a class="btn g sm" href="${esc(enlacePrincipal(r.enlace))}" target="_blank" rel="noopener">Abrir${listaEnlaces(r.enlace).length>1?` (+${listaEnlaces(r.enlace).length-1})`:''}</a>
       ${puedeEditar?` <button class="btn n sm" onclick="editarRegistro('${esc(r.recordId)}')">Editar</button>`:''}
       ${S.perfil.puede.registrar?` <button class="btn n sm" title="Registrar otra evidencia igual, cambiando fecha y enlace" onclick="duplicarRegistro('${esc(r.recordId)}')">Duplicar</button>`:''}</td></tr>`;
 }
@@ -1570,7 +1615,7 @@ function formRegistro(modelo){
     ${campoF('Descripción', `<textarea id="gDesc" placeholder="Qué contiene la evidencia">${esc(modelo.descripcion||'')}</textarea>`,
       notaF('Qué contiene <b>esta</b> evidencia en particular. No repitas lo que ya dicen el formato, el programa y el periodo: escribe lo que la distingue de las demás. Ej.: «Acta de la 3.ª sesión: se aprueba el alcance del SGOE y se asignan responsables de los nueve procesos; 7 asistentes». Si dos descripciones son idénticas, no se podrá saber cuál evidencia es cuál al buscar.'), {req:true, completo:true})}
     ${campoArchivo('gEnlace', 'Archivo de la evidencia',
-      notaF('Pulsa <b>Cargar archivo</b> y elige el acta, la lista o el informe desde tu computadora. Máximo 10 MB. <b>Ten en cuenta</b> que el archivo queda accesible para quien tenga su enlace: si contiene datos personales de estudiantes, mejor súbelo a Drive con acceso restringido y pega aquí ese enlace.'), {req:true, completo:true, origen:'evidencia'})}
+      notaF('Pulsa <b>Cargar archivos</b> y elige el acta, la lista de asistencia y lo que acompañe a la evidencia: puedes seleccionar varios de una vez. Máximo 25 MB por archivo. <b>Ten en cuenta</b> que el archivo queda accesible para quien tenga su enlace: si contiene datos personales de estudiantes, mejor súbelo a Drive con acceso restringido y pega aquí ese enlace.'), {req:true, completo:true, origen:'evidencia'})}
     ${campoF('Retención (años)', `<input type="number" id="gRet" min="1" max="50" value="${esc(modelo.retencion||'5')}">`,
       notaF('Cuántos años debe guardarse. Si no hay una regla institucional, <b>5 años</b> es una práctica común (cubre un ciclo de acreditación). El sistema calcula la fecha límite.'))}
     ${campoF('Disposición final', `<select id="gDisp">${opciones(DISPOSICION,modelo.disposicion||'Evaluar al vencer')}</select>`,
