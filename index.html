@@ -51,6 +51,10 @@ main{max-width:1240px;margin:0 auto;padding:20px}
 .btn:hover{background:var(--brand-oscuro)}
 .btn.g{background:transparent;color:var(--brand)}
 .btn.g:hover{background:var(--brand-suave)}
+.salto-version{display:flex;align-items:center;gap:10px;background:var(--brand-suave);border:1px solid var(--brand);
+  border-radius:9px;padding:10px 14px;font-size:17px;color:var(--brand-oscuro)}
+.salto-version .flecha{opacity:.65}
+.salto-version b{font-size:19px}
 .btn.n{background:transparent;color:var(--tinta-media);border-color:var(--linea)}
 .btn.rojo{background:var(--falla);border-color:var(--falla)}
 .btn.ambar{background:var(--parcial);border-color:var(--parcial)}
@@ -429,7 +433,7 @@ function guiaRapida(){
   const paso = (n, t, cuerpo) => `<div class="pasoguia"><div class="num">${n}</div><div><span class="tit">${t}</span>${cuerpo}</div></div>`;
   modal(`<div class="modal-cab"><div style="flex:1"><div class="sub">Guía de uso</div><h2>Cómo funciona el repositorio, paso a paso</h2></div><button class="cerrar" onclick="cerrarModal()">×</button></div>
   <div class="modal-cuerpo guia">
-    <div class="aviso-caja info">En una frase: <b>los documentos se proponen, alguien los revisa, alguien los aprueba y recién entonces quedan vigentes</b>. Todo ocurre dentro de este aplicativo; el archivo en sí vive en Google Drive.</div>
+    <div class="aviso-caja info">En una frase: <b>los documentos se proponen, alguien los revisa, alguien los aprueba y recién entonces quedan vigentes</b>. Todo ocurre dentro de este aplicativo; el archivo se carga al propio repositorio.</div>
 
     <h3>A. Quiero leer un documento (todos)</h3>
     ${paso(1,'Entra a la pestaña «Lista maestra»','<p>Es el índice oficial de todos los documentos del SGOE.</p>')}
@@ -437,7 +441,7 @@ function guiaRapida(){
     ${paso(3,'Haz clic en la fila','<p>Se abre la ficha: a la izquierda el documento para leerlo, a la derecha sus datos, versiones y observaciones. Lo que imprimas es copia no controlada.</p>')}
 
     <h3>B. Quiero crear un documento nuevo${p.puede.solicitar?'':' (necesitas rol de responsable de proceso)'}</h3>
-    ${paso(1,'Prepara el borrador en Google Drive','<p>Sube el archivo y compártelo con el dominio <b>urp.edu.pe</b> como lector. Copia el enlace: sin eso, el revisor no podrá abrirlo.</p>')}
+    ${paso(1,'Prepara el borrador','<p>Ten listo el archivo en tu computadora. Al llenar la solicitud lo subes con el botón <b>Cargar archivo</b>: queda guardado en el repositorio y el revisor lo abre desde ahí. No hay que pasarlo por Drive ni compartir nada.</p>')}
     ${paso(2,'Lista maestra → botón «+ Solicitar nuevo documento»','<p>Ahí se registra la solicitud. Es el único lugar donde nacen los documentos nuevos.</p>')}
     ${paso(3,'Llena el formulario','<p>Título, tipo, proceso, responsable, cada cuántos meses se revisa, el enlace del borrador y la justificación. El código (<span class="mono">' + esc(S.prefijo) + '-TIPO-PROCESO-NNN</span>) se asigna solo.</p>')}
     ${paso(4,'Elige quién revisa y quién aprueba','<p>Son dos personas distintas, y ninguna puedes ser tú. Al guardar, al revisor le llega un correo.</p>')}
@@ -779,7 +783,7 @@ function vMaestra(){
   </div>
   ${comoSeUsa('Cómo se usa esta pestaña', [
     '<b>Para leer un documento:</b> haz clic en su fila. Se abre la ficha con el archivo, sus versiones y sus observaciones.',
-    S.perfil.puede.solicitar ? '<b>Para crear uno nuevo:</b> botón <b>+ Solicitar nuevo documento</b> (arriba a la derecha). Antes, sube el borrador a Drive y compártelo con urp.edu.pe.' : '<b>Para proponer un documento nuevo:</b> pídelo al responsable de tu proceso o a control documental.',
+    S.perfil.puede.solicitar ? '<b>Para crear uno nuevo:</b> botón <b>+ Solicitar nuevo documento</b> (arriba a la derecha). El borrador se carga ahí mismo, desde tu computadora.' : '<b>Para proponer un documento nuevo:</b> pídelo al responsable de tu proceso o a control documental.',
     S.perfil.puede.solicitar ? '<b>Para cambiarlo o darlo de baja:</b> abre el documento y usa los botones <b>Solicitar modificación</b> o <b>Solicitar anulación</b> del pie de la ficha.' : '',
     S.perfil.puede.registrarExistente ? '<b>Para cargar documentos ya aprobados antes del repositorio</b> (Política, Alcance, guías): botón <b>Registrar documento ya aprobado</b>. No pasan por el flujo.' : ''
   ].filter(Boolean))}
@@ -900,12 +904,12 @@ function pintarFicha(pestana){
     </div>
     <div class="modal-pie">
       <span class="sub" style="margin-right:auto;align-self:center">Toda copia impresa o descargada es copia no controlada.</span>
-      ${d.enlace?`<a class="btn n" href="${esc(d.enlace)}" target="_blank" rel="noopener">Abrir en Drive</a>`:''}
+      ${d.enlace?`<a class="btn n" href="${esc(d.enlace)}" target="_blank" rel="noopener">Abrir documento</a>`:''}
       ${d.enlaceEditable && reg?`<a class="btn n" href="${esc(d.enlaceEditable)}" target="_blank" rel="noopener">Formato editable</a>`:''}
       <button class="btn n" onclick="pintarFicha('ficha');setTimeout(()=>window.print(),150)">Imprimir ficha</button>
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
       ${puedeGestionar?`<button class="btn g" onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
-      <button class="btn" onclick="formDocumento('Modificación','${esc(d.codigo)}')">Solicitar modificación</button>`:''}
+      <button class="btn" onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
     </div>`, true);
 }
 /* Corrección directa, sin flujo: enlaces, responsable, frecuencia de revisión…
@@ -1031,7 +1035,9 @@ function pintarCascada(){
   const v = valorCascada();
   cont.innerHTML = (rutasPermitidas().length ? html : `<div class="lista-vacia">⚠ No hay procesos disponibles${S.perfil.puede.todosLosProcesos?' en el inventario':' asignados a tu usuario'}.</div>`) +
     `<div class="casc-ruta"><span class="sub">Ruta seleccionada:</span> ${v ? esc(rutaLegible(v)) : '<span class="sub">— elige al menos el tipo y el proceso nivel 0 —</span>'}</div>`;
-  $('dProceso').value = v;
+  // El bloque de proceso ya no se dibuja en el formulario; la cascada queda
+  // aquí lista por si se vuelve a activar, pero no supone que el campo exista.
+  if ($('dProceso')) $('dProceso').value = v;
   previoCodigo();
 }
 
@@ -1056,21 +1062,25 @@ const campoF = (etiqueta, control, notaHtml, o = {}) =>
   `<div class="campo${o.completo?' completo':''}"><label${o.req?' class="req"':''}>${etiqueta}</label>${control}${notaHtml||''}</div>`;
 const notaF = html => `<div class="nota-campo">${html}</div>`;
 
+/* Versionado por enteros: 1.0 → 2.0 → 3.0. Misma regla que aplica el servidor;
+   aquí solo se usa para anticiparle al usuario qué versión le va a tocar. */
+function siguienteVersion(actual){
+  let v = parseFloat(String(actual||'').replace(',','.'));
+  if (!isFinite(v) || v < 1) v = 1;
+  return (Math.floor(v)+1).toFixed(1);
+}
+
 let DOC_OCULTO = {};   // valores que el formulario ya no muestra pero debe preservar
 function camposDocumento(v){
   DOC_OCULTO = { objetivo:v.objetivo, clausulas:v.clausulas, frecuencia:v.frecuencia, palabras:v.palabras,
-    enlaceEditable:v.enlaceEditable, clase:v.clase, ubicacion:v.ubicacion };
-  iniciarCascada(v.proceso);
-  setTimeout(pintarCascada, 0);
+    enlaceEditable:v.enlaceEditable, clase:v.clase, ubicacion:v.ubicacion,
+    proceso:v.proceso, macroproceso:v.macroproceso };
   const cl = (v.clausulas||'').split(';').map(x=>x.trim());
   return `<div class="campos">
     ${campoF('Título del documento', `<input type="text" id="dTitulo" value="${esc(v.titulo)}" placeholder="Ej. Guía de docentes">`,
       notaF('Nombre oficial, <b>sin el código</b>. Escríbelo como aparecerá en la carátula. No puede repetir el título de otro documento vigente.'), {req:true, completo:true})}
     ${campoF('Tipo de documento', `<select id="dTipo" onchange="previoCodigo()">${opciones(S.cat.tipos.map(t=>({v:t.nombre,t:`${t.nombre} (${t.codigo})`})),v.tipo,'Seleccione')}</select>`,
       origenLista('Tipo de documento'), {req:true})}
-    ${campoF('Proceso al que pertenece el documento', `<input type="hidden" id="dProceso" value=""><div class="cascada" id="cascProc"></div>`,
-      notaF('Elige de arriba hacia abajo, como en la Matriz de Indicadores: <b>Tipo de proceso → Proceso nivel 0 → nivel 1 → nivel 2 → nivel 3 → Procedimiento (nivel 4)</b>. Cada lista muestra solo lo que cuelga de lo elegido arriba. <b>Baja hasta el nivel al que pertenece el documento:</b> una política o un manual general se queda en el nivel 0; una guía de un proceso, en su nivel 1 o 2; un procedimiento llega hasta el nivel 4. Tipo y nivel 0 son obligatorios; los demás, opcionales.') +
-      origenLista('Proceso') + (!S.perfil.puede.todosLosProcesos ? notaF('Solo ves los procesos que tienes asignados como responsable.') : ''), {req:true, completo:true})}
     ${campoF('Programa', `<select id="dPrograma">${opciones(S.cat.programas.map(x=>x.nombre),v.programa,'Seleccione')}</select>`,
       origenLista('Programa'))}
     ${campoF('Unidad responsable', `<input type="text" id="dUnidad" value="${esc(v.unidad)}" placeholder="Ej. Comisión de Calidad FI">`,
@@ -1092,8 +1102,10 @@ function camposDocumento(v){
   </div>`;
 }
 function leerCamposDocumento(){
-  if (!CASC.some(e => e.i >= 1)) throw new Error('Elige el proceso al menos hasta el «Proceso nivel 0».');
-  return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value, proceso:$('dProceso').value, programa:$('dPrograma').value,
+  return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value,
+    // El proceso salió del formulario: el que ya tenía el documento se conserva,
+    // y los nuevos nacen sin proceso (se asigna en QuintaDB si hace falta).
+    proceso:DOC_OCULTO.proceso||'', programa:$('dPrograma').value,
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
     // Campos retirados del formulario: se conservan tal como estaban (se editan
     // directamente en QuintaDB), nunca se vacían al guardar.
@@ -1106,9 +1118,10 @@ function leerCamposDocumento(){
 }
 function previoCodigo(){
   const el = $('codPrevio'); if (!el) return;
-  const t = S.cat.tipos.find(x=>x.nombre===$('dTipo').value), raiz = codigoTramo(segsDe($('dProceso').value)[1]);
-  if (!t || !raiz){ el.textContent = 'Elige tipo y proceso nivel 0'; return; }
-  const base = `${S.prefijo}-${t.codigo}-${raiz}-`;
+  const t = S.cat.tipos.find(x=>x.nombre===$('dTipo').value);
+  if (!t){ el.textContent = 'Elige el tipo de documento'; return; }
+  const raiz = codigoTramo(segsDe(DOC_OCULTO.proceso||'')[1]);
+  const base = `${S.prefijo}-${t.codigo}-${raiz?raiz+'-':''}`;
   const usados = S.docs.map(d=>d.codigo).concat(S.sols.map(s=>s.codigo)).filter(c=>c.startsWith(base)).map(c=>parseInt(c.slice(base.length))||0);
   el.textContent = base + String(Math.max(0,...usados)+1).padStart(3,'0');
 }
@@ -1121,8 +1134,53 @@ function selectorFlujo(){
     <div class="completo aviso-caja info"><b>¿Qué pasa al pulsar «Iniciar flujo de aprobación»?</b> La solicitud pasa a revisión y al revisor le llega un correo. Tú la sigues desde <b>Flujo documental → Mis solicitudes</b>. Si te la observan, te llegará un correo para que la corrijas.</div>
   </div>`;
 }
-const campoBorrador = (etiqueta) => campoF(etiqueta, `<input type="url" id="fBorrador" placeholder="https://drive.google.com/file/d/...">`,
-  notaF('<b>Cómo obtenerlo:</b> sube el archivo a Google Drive → clic derecho → <b>Compartir</b> → en «Acceso general» elige <b>Universidad Ricardo Palma</b> (lector) → <b>Copiar enlace</b> y pégalo aquí. Si no lo compartes, el revisor verá la pantalla en blanco.'), {req:true, completo:true});
+/* --------------------------------------------------- carga de archivos
+   El archivo se sube al repositorio (QuintaDB) y lo que queda guardado es la
+   URL que este devuelve. El input con el id de siempre se conserva oculto,
+   porque todo lo demás sigue leyendo su valor: lo único que cambia es que esa
+   URL ya no se pega a mano. */
+const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png';
+function campoArchivo(id, etiqueta, nota, o = {}){
+  return campoF(etiqueta,
+    `<div class="carga-archivo">
+       <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" style="display:none" onchange="subirArchivo('${id}','${o.origen||'documento'}')">
+       <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivo</button>
+       <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
+       <input type="hidden" id="${id}" value="">
+     </div>`, nota, o);
+}
+function leerBase64(f){
+  return new Promise((ok, mal) => { const l = new FileReader();
+    l.onload = () => ok(String(l.result).split(',')[1]);
+    l.onerror = () => mal(new Error('No se pudo leer el archivo desde tu computadora.'));
+    l.readAsDataURL(f); });
+}
+async function subirArchivo(id, origen){
+  const inp = $(id+'_file'), est = $(id+'_estado'), btn = $(id+'_btn');
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const mb = f.size / 1048576;
+  if (mb > 10){
+    est.innerHTML = `<b style="color:var(--falla)">Pesa ${mb.toFixed(1)} MB y el máximo es 10 MB.</b> Comprímelo e inténtalo de nuevo.`;
+    inp.value = ''; return;
+  }
+  btn.disabled = true; est.textContent = `Subiendo ${f.name}…`;
+  try{
+    const base64 = await leerBase64(f);
+    const r = await api('/archivo', { nombre:f.name, base64, origen:origen||'documento', codigo:($('dTitulo')?$('dTitulo').value.trim():'') });
+    $(id).value = r.url;
+    est.innerHTML = `✔ <b>${esc(r.nombre)}</b> (${r.mb} MB) · <a href="${esc(r.url)}" target="_blank" rel="noopener">ver archivo</a> · <a href="#" onclick="quitarArchivo('${id}');return false">quitar</a>`;
+  }catch(e){
+    est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(e.message)}`;
+    inp.value = '';
+  }finally{ btn.disabled = false; }
+}
+function quitarArchivo(id){
+  $(id).value = ''; $(id+'_file').value = '';
+  $(id+'_estado').textContent = 'Ningún archivo cargado todavía';
+}
+const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
+  notaF('Pulsa <b>Cargar archivo</b> y elige el borrador desde tu computadora. Se sube al repositorio y el revisor lo abre desde aquí: ya no hace falta subirlo a Drive ni compartirlo. Formatos: PDF, Word, Excel, PowerPoint o imagen. Máximo 10 MB.'),
+  {req:true, completo:true, origen:'borrador'});
 
 function formDocumento(modo, codigo){
   const doc = codigo ? S.docs.find(d=>d.codigo===codigo) : null;
@@ -1132,17 +1190,17 @@ function formDocumento(modo, codigo){
     finalidad = 'Con este formulario <b>propones un documento nuevo</b>. No queda vigente al guardar: primero lo revisa una persona y luego lo aprueba otra. Llena la ficha, pega el enlace del borrador y elige revisor y aprobador.';
     html = `<div class="codigo-previo"><span class="sub">Código que se reservará</span><b id="codPrevio">Elige tipo y proceso</b><span class="sub">(lo asigna el sistema a partir del tipo y del proceso)</span></div>
       <h3 class="sec-form">Ficha del documento</h3>${camposDocumento({})}
-      <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Enlace del borrador en Drive')}
+      <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Archivo del borrador')}
       ${campoF('Justificación de la creación', `<textarea id="fJust" placeholder="Por qué se necesita este documento"></textarea>`,
         notaF('Explica por qué se necesita: qué vacío cubre, qué requisito atiende o qué lo motivó (una auditoría, un acuerdo, un cambio normativo). El revisor lo leerá primero.'), {req:true, completo:true})}</div>
       ${selectorFlujo()}`;
   } else if (modo==='Modificación'){
-    titulo = `Solicitar modificación · ${doc.codigo}`;
-    finalidad = `Con este formulario <b>propones una versión nueva</b> de «${esc(doc.titulo)}». La versión vigente (<span class="mono">v${esc(doc.version)}</span>) sigue siendo la oficial hasta que se apruebe el cambio. Cambia solo los datos que correspondan: los que modifiques se resaltarán para el revisor.`;
-    html = `<div class="campos">${campoF('Tipo de cambio', `<select id="fCambio">${opciones([{v:'Mayor',t:'Mayor — cambia el contenido o los requisitos'},{v:'Menor',t:'Menor — solo forma, redacción o datos'}],'Mayor')}</select>`,
-        notaF(`<b>Mayor:</b> cambian reglas, pasos, responsabilidades o requisitos; la versión pasa a <b>${(Math.floor(parseFloat(doc.version)||1)+1).toFixed(1)}</b>. <b>Menor:</b> se corrige redacción, ortografía, un nombre o un dato; pasa a <b>${(Math.round(((parseFloat(doc.version)||1)+0.1)*10)/10).toFixed(1)}</b>.`), {req:true})}</div>
+    titulo = `Actualizar · ${doc.codigo}`;
+    finalidad = `Con este formulario <b>propones una versión nueva</b> de «${esc(doc.titulo)}». La versión vigente (<span class="mono">v${esc(doc.version)}</span>) sigue siendo la oficial hasta que se apruebe la actualización. Cambia solo los datos que correspondan: los que modifiques se resaltarán para el revisor.`;
+    html = `<div class="campos">${campoF('Versión', `<div class="salto-version"><span class="mono">v${esc(doc.version||'1.0')}</span> <span class="flecha">→</span> <b class="mono">v${siguienteVersion(doc.version)}</b></div>`,
+        notaF('El sistema asigna la versión: cada actualización aprobada sube un número entero. No hay que escribirla ni elegir entre cambio mayor y menor.'), {completo:true})}</div>
       <h3 class="sec-form">Ficha del documento</h3>${camposDocumento(doc)}
-      <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Enlace del borrador actualizado')}
+      <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Archivo del borrador actualizado')}
       ${campoF('Descripción y justificación del cambio', `<textarea id="fJust" placeholder="Qué cambia y por qué"></textarea>`,
         notaF('Di <b>qué cambia</b> (secciones, pasos, responsables) y <b>por qué</b>. Este texto queda en el historial de versiones del documento.'), {req:true, completo:true})}</div>
       ${selectorFlujo()}`;
@@ -1164,8 +1222,8 @@ function formDocumento(modo, codigo){
         ${campoF('Elaboró', `<input type="text" id="eElaboro">`, notaF('Quién lo redactó, si se sabe.'))}
         ${campoF('Revisó', `<input type="text" id="eReviso">`, notaF('Quién lo revisó, si se sabe.'))}
         ${campoF('Aprobó', `<input type="text" id="eAprobo">`, notaF('Autoridad que lo aprobó.'))}
-        ${campoF('Enlace del documento aprobado', `<input type="url" id="eEnlace" placeholder="https://drive.google.com/file/d/...">`,
-          notaF('El PDF firmado en Drive, compartido con la Universidad Ricardo Palma como lector. Es lo que se mostrará en el visor.'), {completo:true})}
+        ${campoArchivo('eEnlace', 'Archivo del documento aprobado',
+          notaF('El PDF firmado. Se sube al repositorio y es lo que se verá en el visor. Máximo 10 MB.'), {completo:true, origen:'documento'})}
       </div><h3 class="sec-form">Ficha del documento</h3>${camposDocumento({})}`;
   }
   modal(`<div class="modal-cab"><h2 style="flex:1">${esc(titulo)}</h2><button class="cerrar" onclick="cerrarModal()">×</button></div>
@@ -1186,7 +1244,7 @@ async function enviarDocumento(modo, codigo){
     const cuerpo = { tipo:modo, codigo, justificacion:$('fJust').value.trim(), correoRevisor:$('fRevisor').value, correoAprobador:$('fAprobador').value };
     if (modo!=='Anulación'){
       cuerpo.datos = leerCamposDocumento(); cuerpo.enlaceBorrador = $('fBorrador').value.trim();
-      if (modo==='Modificación') cuerpo.tipoCambio = $('fCambio').value;
+      // La versión la calcula el servidor: cada actualización sube un entero.
     }
     const r = await api('/solicitud', cuerpo);
     aviso(`Solicitud ${r.id} registrada · ${r.codigo}`); cerrarModal(); await recargar(); mostrar('flujo');
@@ -1251,14 +1309,14 @@ function abrirSolicitud(id){
         <div class="nota-campo">Número de la resolución, acta u oficio que aprueba. Queda en el historial de versiones como respaldo.</div></div>
       <div class="campo"><label>Fecha de aprobación</label><input type="date" id="aFecha" value="${S.hoy}">
         <div class="nota-campo">La fecha del documento de aprobación. Desde ella se cuenta la próxima revisión.</div></div>
-      ${s.tipo!=='Anulación'?`<div class="campo completo"><label>Enlace final del documento aprobado</label><input type="url" id="aEnlace" placeholder="https://drive.google.com/file/d/...">
-        <div class="nota-campo">Si tienes el PDF firmado, pega aquí su enlace (compartido con la universidad). Si lo dejas vacío, queda como oficial el borrador revisado.</div></div>`:''}
+      ${s.tipo!=='Anulación'?campoArchivo('aEnlace', 'Archivo final del documento aprobado',
+        notaF('Si ya tienes el PDF firmado, cárgalo aquí. Si lo dejas vacío, queda como oficial el borrador revisado.'), {completo:true, origen:'documento'}):''}
       <div class="campo completo"><label>Comentario</label><textarea id="aCom" placeholder="Obligatorio si observas o rechazas"></textarea>
         <div class="nota-campo">Si observas o rechazas, explica el motivo: el solicitante lo recibirá por correo.</div></div>
     </div>
     <div class="modal-pie" style="padding:10px 0 0;border:0"><button class="btn rojo" onclick="accion('${esc(s.id)}','rechazar')">Rechazar</button><button class="btn ambar" onclick="accion('${esc(s.id)}','observar')">Observar</button><button class="btn" onclick="accion('${esc(s.id)}','aprobar')">${s.tipo==='Anulación'?'Aprobar anulación':'Aprobar y publicar'}</button></div>`;
   else if (s.etapa==='Observada' && s.correoSolicitante===c) acciones = `
-    <div class="comose"><b>Tu solicitud fue observada</b><div class="finalidad">Lee la observación en el historial de arriba, corrige el borrador en Drive y pulsa <b>Reenviar a revisión</b>. Si ya no quieres seguir, pulsa <b>Desistir</b> y el trámite se cierra.</div></div>
+    <div class="comose"><b>Tu solicitud fue observada</b><div class="finalidad">Lee la observación en el historial de arriba, corrige el borrador y vuelve a cargarlo, luego pulsa <b>Reenviar a revisión</b>. Si ya no quieres seguir, pulsa <b>Desistir</b> y el trámite se cierra.</div></div>
     <div class="campos">${s.tipo!=='Anulación'?`<div class="campo completo"><label>Enlace del borrador corregido</label><input type="url" id="aBorrador" value="${esc(s.enlaceBorrador)}">
       <div class="nota-campo">Si corregiste el mismo archivo de Drive, el enlace no cambia: déjalo como está.</div></div>`:''}
       <div class="campo completo"><label>¿Qué subsanaste?</label><textarea id="aCom"></textarea>
@@ -1276,7 +1334,7 @@ function abrirSolicitud(id){
       <div class="panel"><div class="panel-cuerpo">
         <dl class="meta"><dt>Solicitante</dt><dd>${esc(s.solicitante)}</dd><dt>Revisor</dt><dd>${esc(s.revisor)}</dd><dt>Aprobador</dt><dd>${esc(s.aprobador)}</dd>
         ${s.tipoCambio?`<dt>Tipo de cambio</dt><dd>${esc(s.tipoCambio)}</dd>`:''}<dt>Justificación</dt><dd>${esc(s.justificacion)}</dd>${filas}
-        ${s.enlaceBorrador?`<dt>Borrador</dt><dd><a href="${esc(s.enlaceBorrador)}" target="_blank" rel="noopener">abrir en Drive</a></dd>`:''}</dl>
+        ${s.enlaceBorrador?`<dt>Borrador</dt><dd><a href="${esc(s.enlaceBorrador)}" target="_blank" rel="noopener">abrir</a></dd>`:''}</dl>
         <h3 style="font-size:13px;margin:16px 0 8px">Historial</h3>
         <div class="linea-tiempo">${s.historial.map(h=>`<div class="hito"><div class="h-cab"><b>${esc(h.accion)}</b> <span class="sub">${esc(h.nombre)} · ${fechaCorta(h.fecha)}</span></div>${h.comentario?`<div class="h-txt">${esc(h.comentario)}</div>`:''}</div>`).join('')}</div>
         ${acciones?`<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:12px">${acciones}</div>`:''}
@@ -1320,7 +1378,7 @@ async function vRegistros(force){
   <div class="titulo-seccion"><div><h2>Registros y evidencias${tip('Aquí se deja constancia de que un formato se usó: actas, listas de asistencia, informes. No pasan por el flujo de aprobación; se registran y se conservan el plazo indicado.', true)}</h2><p>Información documentada conservada · retención y disposición final (7.5.3)</p></div><div class="espacio"></div>
     ${S.perfil.puede.registrar?'<button class="btn" onclick="formRegistro()">+ Registrar evidencia</button>':''}</div>
   ${comoSeUsa('Cómo se registra una evidencia', [
-    'Sube el archivo a Google Drive y <b>compártelo con el dominio urp.edu.pe</b> (como lector). Copia su enlace.',
+    'Ten el archivo del borrador a mano en tu computadora: lo cargarás en el paso siguiente.',
     'Escribe el <b>número propio del documento</b> con la convención de la Facultad: <span class="mono">ACTA-003-2026</span>, <span class="mono">OFICIO-045-2026-FI</span>, <span class="mono">RD-123-2026</span>, <span class="mono">MEMO-012-2026-FI</span>, <span class="mono">INF-007-2026-FI</span>. Si no tiene número, déjalo vacío y el sistema le asigna uno con la fecha.',
     'La <b>fecha de la evidencia</b> (el día del acta o de la actividad) es obligatoria: es la que ordena la lista.',
     'Pulsa <b>+ Registrar evidencia</b>, elige la <b>categoría</b> (acta, sustentación, plan de trabajo…), el <b>formato</b>, el <b>programa</b> y el <b>periodo</b>.',
@@ -1511,8 +1569,8 @@ function formRegistro(modelo){
       {req:fechaEvidenciaLista(), completo:false})}
     ${campoF('Descripción', `<textarea id="gDesc" placeholder="Qué contiene la evidencia">${esc(modelo.descripcion||'')}</textarea>`,
       notaF('Qué contiene <b>esta</b> evidencia en particular. No repitas lo que ya dicen el formato, el programa y el periodo: escribe lo que la distingue de las demás. Ej.: «Acta de la 3.ª sesión: se aprueba el alcance del SGOE y se asignan responsables de los nueve procesos; 7 asistentes». Si dos descripciones son idénticas, no se podrá saber cuál evidencia es cuál al buscar.'), {req:true, completo:true})}
-    ${campoF('Enlace de la evidencia (Drive)', `<input type="url" id="gEnlace" placeholder="https://drive.google.com/...">`,
-      notaF('Sube el archivo o la carpeta a Drive → <b>Compartir</b> → acceso para <b>Universidad Ricardo Palma</b> como lector → <b>Copiar enlace</b>.'), {req:true, completo:true})}
+    ${campoArchivo('gEnlace', 'Archivo de la evidencia',
+      notaF('Pulsa <b>Cargar archivo</b> y elige el acta, la lista o el informe desde tu computadora. Máximo 10 MB. <b>Ten en cuenta</b> que el archivo queda accesible para quien tenga su enlace: si contiene datos personales de estudiantes, mejor súbelo a Drive con acceso restringido y pega aquí ese enlace.'), {req:true, completo:true, origen:'evidencia'})}
     ${campoF('Retención (años)', `<input type="number" id="gRet" min="1" max="50" value="${esc(modelo.retencion||'5')}">`,
       notaF('Cuántos años debe guardarse. Si no hay una regla institucional, <b>5 años</b> es una práctica común (cubre un ciclo de acreditación). El sistema calcula la fecha límite.'))}
     ${campoF('Disposición final', `<select id="gDisp">${opciones(DISPOSICION,modelo.disposicion||'Evaluar al vencer')}</select>`,
@@ -1573,7 +1631,7 @@ const DICC = {
     'Documento de aprobación':'Resolución, acta u oficio que respalda la aprobación de la versión vigente.',
     'Frecuencia de revisión (meses)':'Cada cuántos meses debe revisarse el documento aunque nadie pida cambios.',
     'Próxima revisión':'Fecha que calcula el sistema: fecha de aprobación + frecuencia. Avisa 60 días antes.',
-    'Enlace documento':'Enlace de Google Drive al archivo oficial (de preferencia PDF). Es lo que se ve en el visor.',
+    'Enlace documento':'Dirección del archivo oficial (de preferencia PDF). Es lo que se ve en el visor. Se llena solo al cargar el archivo.',
     'Enlace editable':'Enlace al archivo de trabajo (Word o Google Docs) para preparar futuras versiones.',
     'Palabras clave':'Términos por los que alguien buscaría el documento.',
     'Solicitud en curso':'Número de la solicitud de cambio en trámite (SOL-…). Vacío si no hay ninguna.',
@@ -1606,7 +1664,7 @@ const DICC = {
     'Tipo de cambio':'Mayor o Menor (solo en modificaciones).',
     'Justificación':'Por qué se pide la creación, el cambio o la baja.',
     'Datos propuestos':'Dato técnico: la ficha propuesta del documento, en formato JSON.',
-    'Enlace borrador':'Archivo en Drive que se revisa y aprueba.',
+    'Enlace borrador':'Archivo del borrador que se revisa y aprueba.',
     'Solicitante':'Quién inició el trámite.',
     'Correo solicitante':'Correo del solicitante.',
     'Fecha solicitud':'Cuándo se inició.',
@@ -1734,7 +1792,7 @@ const FICHAS = {
       'Fuente / emisor':{ tipo:'texto', nota:'Solo documentos externos: quién lo emite.' },
       'Medio':{ tipo:'lista', opciones:['Digital','Digital y físico'] },
       'Documento de aprobación':{ tipo:'texto' },
-      'Enlace documento':{ tipo:'url', nota:'Archivo oficial en Drive, compartido con urp.edu.pe como lector. Si el visor sale en blanco, casi siempre es porque el archivo no está compartido.' },
+      'Enlace documento':{ tipo:'url', nota:'Dirección del archivo oficial. Normalmente se llena sola al cargar el archivo desde el formulario; aquí solo se corrige si quedó mal o si quieres apuntar a un archivo en Drive.' },
     }
   },
   registros: {
