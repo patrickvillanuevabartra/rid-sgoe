@@ -368,7 +368,7 @@ dl.meta dd{margin:0;word-break:break-word}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-10-12a';
+const BACKEND_ESPERADO = '2026-10-19a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 /* A quién escribe la persona que no tiene acceso todavía. */
 const CORREO_ACCESO = 'patrick.villanueva@urp.edu.pe';
@@ -573,6 +573,10 @@ async function api(ruta, cuerpo, intento){
         ? 'El Apps Script publicado es una versión anterior y todavía no tiene esta función. Mira el aviso amarillo de arriba para actualizarlo.'
         : 'Esta función aún no está disponible: el repositorio se está actualizando. Intenta más tarde o avisa al administrador.');
     }
+    // Cuenta sin acceso al repositorio: no es una falla, es una respuesta
+    // prevista. Se devuelve tal cual para que entrar() muestre la pantalla
+    // que explica cómo pedir el alta, en lugar de un mensaje de error.
+    if (d.noAutorizado) return d;
     if (d.error){
       if (/sesión venció|Sesión ausente|token/i.test(d.error)){
         if (intento < 1 && await renovarSesion()) return api(ruta, cuerpo, intento+1);
@@ -653,6 +657,13 @@ async function entrar(){
 }
 async function recargar(){
   const d = await api('/inicio');
+  // El servidor rechaza a quien no figura en la tabla Usuarios: no llega nada
+  // más que el perfil, así que se corta aquí y entrar() muestra la pantalla.
+  if (d.noAutorizado){
+    S.perfil = Object.assign({ correo:'', nombre:'', roles:[], procesos:[], puede:{} }, d.perfil || {});
+    S.perfil.enPadron = false;
+    return;
+  }
   S.columnasFaltantes = d.columnasFaltantes || {};
   if (d.registros) S.registros = d.registros;   // llegan con el inicio: la pestaña abre sin esperar
   Object.assign(S, { perfil:d.perfil, cat:d.catalogos, cand:d.candidatos, docs:d.documentos, sols:d.solicitudes,
@@ -662,8 +673,17 @@ async function recargar(){
     //   enPadron   → figura en la tabla Usuarios; es lo que abre la puerta del repositorio.
     //   registrado → tiene algún permiso, o sea participa y no solo consulta. El rol
     //                Lector entra (está en el padrón) pero navega en modo consulta.
-    S.perfil.enPadron = !!S.perfil.registrado;
-    S.perfil.registrado = Object.values(S.perfil.puede || {}).some(Boolean);
+    // Desde el backend 2026-10-19a vienen las dos del servidor; si el publicado
+    // es anterior, se deducen aquí para que la página siga funcionando igual.
+    if (S.perfil.enPadron === undefined){
+      S.perfil.enPadron = !!S.perfil.registrado;
+      S.perfil.registrado = Object.values(S.perfil.puede || {}).some(Boolean);
+    }
+    // Restricción por proceso desactivada mientras el campo «Procesos» no se
+    // administre desde el aplicativo: sin procesos asignados no se restringe
+    // nada, para que la falta de ese dato no impida registrar documentos.
+    // Se reactiva por sí sola en cuanto la fila del usuario tenga procesos.
+    if (!(S.perfil.procesos || []).length && S.perfil.puede) S.perfil.puede.todosLosProcesos = true;
   }
   S.backend = d.backend || '';
   if (S.backend < BACKEND_ESPERADO) mostrarAvisoVersion(S.backend); else ocultarAvisoVersion();
@@ -1685,13 +1705,14 @@ const FICHAS = {
   usuarios: {
     titulo:'Usuarios y roles',
     finalidad:'Define <b>quién entra y quién puede hacer qué</b>. El acceso al repositorio es cerrado: <b>solo entra quien figura en esta tabla</b>. Tener cuenta @urp.edu.pe no basta. Para dar únicamente acceso de consulta, registra a la persona con el rol <b>Lector</b>. <br><b>De aquí salen las listas «Revisor» y «Aprobador»</b> de los formularios: aparece como revisor quien tenga rol Revisor o Controlador documental, y como aprobador quien tenga rol Aprobador. Si una persona tiene dos roles, lleva dos filas.',
-    mostrar:['Nombre','Correo','Rol','Procesos','Estado'],
+    mostrar:['Nombre','Correo','Rol','Estado'],
     nombreFila:'usuario',
     campos:{
       'Correo':{ tipo:'correo', req:true, nota:'Correo institucional exacto con el que la persona entra con Google (nombre.apellido@urp.edu.pe). Si no coincide letra por letra, el rol no se le aplicará.' },
       'Nombre':{ tipo:'texto', req:true, nota:'Apellidos y nombres, como aparecerán en las listas de revisor y aprobador y en el historial de las solicitudes.' },
       'Rol':{ tipo:'lista', opciones:Object.keys(DESC_ROLES), req:true, nota:'rol' },
-      'Procesos':{ tipo:'procesos', nota:'Solo importa para <b>Responsable de proceso</b>: marca los macroprocesos que podrá gestionar. Quien gestiona M01 gestiona también sus procesos internos (M01.07). Marca «Todos» si puede gestionar cualquiera.' },
+      // Campo «Procesos» retirado del formulario: se edita directamente en QuintaDB.
+      // Al no enviarse, QuintaDB conserva el valor que ya tenía la fila.
       'Estado':{ tipo:'lista', opciones:['Vigente','Inactivo'], defecto:'Vigente', nota:'<b>Inactivo</b> le quita el rol sin borrar su historial. No puedes dejar sin ningún administrador vigente al repositorio.' }
     }
   },
