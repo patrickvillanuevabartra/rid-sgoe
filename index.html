@@ -389,6 +389,11 @@ const CFG = window.RIID_CONFIG;
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
 const BACKEND_ESPERADO = '2026-10-19a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
+/* Proceso deshabilitado hasta nuevo aviso. Poniendo esto en true vuelven a
+   aparecer el campo del formulario, la columna de la lista maestra, sus dos
+   filtros, la fila de la ficha y el gráfico del tablero. */
+const PROCESO_ACTIVO = false;
+
 /* A quién escribe la persona que no tiene acceso todavía. */
 const CORREO_ACCESO = 'patrick.villanueva@urp.edu.pe';
 const CLAUSULAS = ['4 Contexto','5 Liderazgo','6 Planificación','7 Apoyo','7.5 Información documentada','8 Operación','9 Evaluación del desempeño','10 Mejora'];
@@ -778,7 +783,7 @@ function vTablero(){
       <div class="sub"><span class="mono">${esc(s.codigo)}</span> · ${esc(s.tipo)} · ${esc(s.id)}</div></div></div>`).join('') : '<div class="vacio">No tienes tareas pendientes.<br><span class="sub">Cuando alguien te asigne una revisión o una aprobación, aparecerá aquí y te llegará un correo.</span></div>'}</div></div>`:''}
     <div class="caja"><h3>Alertas de revisión · próximos 60 días</h3>${alertas.length?`<div class="lista-tareas">${alertas.slice(0,8).map(d=>`
       <div class="tarea" onclick="abrirDocumento('${esc(d.codigo)}')"><div style="flex:1;min-width:0"><div class="t-tit">${esc(d.titulo)}</div><div class="sub"><span class="mono">${esc(d.codigo)}</span> · ${esc(d.responsable||d.unidad||'')}</div></div>${etiRevision(d)}</div>`).join('')}</div>`:'<div class="vacio">Ningún documento vence en los próximos 60 días.</div>'}</div>
-    <div class="caja"><h3>Vigentes por macroproceso</h3><div class="barras">${barras('macroproceso', macros)}</div></div>
+    ${PROCESO_ACTIVO?`<div class="caja"><h3>Vigentes por macroproceso</h3><div class="barras">${barras('macroproceso', macros)}</div></div>`:''}
     <div class="caja"><h3>Vigentes por tipo de documento</h3><div class="barras">${barras('tipo', S.cat.tipos.map(t=>t.nombre))}</div></div>
     ${S.perfil.control ? `<div style="grid-column:1/-1">${desplegable('Puesta en marcha · orden de llenado', puestaEnMarcha().html, puestaEnMarcha().faltan ? `${puestaEnMarcha().faltan} pendiente(s)` : 'Completa', !puestaEnMarcha().faltan)}</div>` : ''}
     <div class="caja" style="grid-column:1/-1"><h3>Aprobados recientemente</h3>${recientes.length?`<div class="lista-tareas">${recientes.map(d=>`
@@ -812,17 +817,17 @@ function vMaestra(){
   <div class="barra-filtros">
     <input type="text" class="buscar" id="fQ" placeholder="Buscar por código, título, palabra clave o responsable" value="${esc(F.q)}">
     <select id="fTipo">${opciones(S.cat.tipos.map(t=>t.nombre),F.tipo,'Todos los tipos')}</select>
-    <select id="fMacro" title="Tipo de proceso">${opciones(tiposProc,F.macro,'Todos los tipos de proceso')}</select>
-    <select id="fProceso" title="Proceso nivel 0">${opciones(S.cat.procesos.filter(x=>!F.macro||x.tipo===F.macro).map(x=>x.etiqueta),F.proceso,'Todos los procesos nivel 0')}</select>
+    ${PROCESO_ACTIVO?`<select id="fMacro" title="Tipo de proceso">${opciones(tiposProc,F.macro,'Todos los tipos de proceso')}</select>
+    <select id="fProceso" title="Proceso nivel 0">${opciones(S.cat.procesos.filter(x=>!F.macro||x.tipo===F.macro).map(x=>x.etiqueta),F.proceso,'Todos los procesos nivel 0')}</select>`:''}
     <select id="fPrograma">${opciones(S.cat.programas.map(x=>x.nombre),F.programa,'Todos los programas')}</select>
     <select id="fEstado">${opciones(S.perfil.registrado?['Vigente','Obsoleto']:['Vigente'],F.estado,'Todos los estados')}</select>
   </div>
-  <div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th><th>Proceso</th><th>Versión</th><th>Estado</th><th>Próx. revisión</th><th></th></tr></thead><tbody id="tbMaestra"></tbody></table></div>
+  <div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th>${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th><th>Próx. revisión</th><th></th></tr></thead><tbody id="tbMaestra"></tbody></table></div>
   <div class="sub" id="pieMaestra" style="margin-top:8px"></div>`;
   const re = () => { pintarMaestra(); };
   $('fQ').oninput = e => { F.q=e.target.value; re(); };
-  [['fTipo','tipo'],['fProceso','proceso'],['fPrograma','programa'],['fEstado','estado']].forEach(([id,k]) => $(id).onchange = e => { F[k]=e.target.value; re(); });
-  $('fMacro').onchange = e => { F.macro=e.target.value; F.proceso=''; vMaestra(); };
+  [['fTipo','tipo'],['fProceso','proceso'],['fPrograma','programa'],['fEstado','estado']].forEach(([id,k]) => { const el=$(id); if (el) el.onchange = e => { F[k]=e.target.value; re(); }; });
+  if ($('fMacro')) $('fMacro').onchange = e => { F.macro=e.target.value; F.proceso=''; vMaestra(); };
   pintarMaestra();
 }
 function pintarMaestra(){
@@ -832,7 +837,7 @@ function pintarMaestra(){
       <td class="cod">${esc(d.codigo)}</td>
       <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${d.programa?' · '+esc(d.programa):''}
         ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}${d.origen==='Externo'?' <span class="eti e-neutra">Externo</span>':''}</div></td>
-      <td>${esc(d.tipo)}</td><td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>
+      <td>${esc(d.tipo)}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
       <td class="mono">v${esc(d.version)}</td>
       <td>${etiEstado(d.estado)}${d.solicitudEnCurso?'<div style="margin-top:3px"><span class="eti e-flujo">En actualización</span></div>':''}${S.obsAbiertas[d.codigo]?`<div class="sub" style="margin-top:3px">${S.obsAbiertas[d.codigo]} observ. abierta(s)</div>`:''}</td>
       <td>${etiRevision(d)}</td>
@@ -877,13 +882,13 @@ function pintarFicha(pestana){
       <dt>Versión vigente</dt><dd class="mono">v${esc(d.version)}</dd>
       <dt>Estado</dt><dd>${etiEstado(d.estado)}${d.fechaBaja?` <span class="sub">desde ${fechaCorta(d.fechaBaja)}</span>`:''}</dd>
       <dt>Tipo</dt><dd>${esc(d.tipo)} · ${esc(d.origen)}</dd>
-      <dt>Proceso</dt><dd>${esc(rutaLegible(d.proceso))}</dd>
+      ${PROCESO_ACTIVO?`<dt>Proceso</dt><dd>${esc(rutaLegible(d.proceso))}</dd>`:''}
       <dt>Programa</dt><dd>${esc(d.programa||'—')}</dd>
       <dt>Unidad responsable</dt><dd>${esc(d.unidad||'—')}</dd>
       <dt>Responsable</dt><dd>${esc(d.responsable||'—')}${d.cargoResponsable?` · ${esc(d.cargoResponsable)}`:''}${d.correoResponsable?` <span class="sub">${esc(d.correoResponsable)}</span>`:''}</dd>
       ${d.fuente?`<dt>Emite</dt><dd>${esc(d.fuente)}</dd>`:''}
-      <dt>Objetivo y alcance</dt><dd>${esc(d.objetivo||'—')}</dd>
-      <dt>Cláusulas ISO 21001</dt><dd>${esc(d.clausulas||'—')}</dd>
+      ${d.objetivo?`<dt>Objetivo y alcance</dt><dd>${esc(d.objetivo)}</dd>`:''}
+      ${d.clausulas?`<dt>Cláusulas ISO 21001</dt><dd>${esc(d.clausulas)}</dd>`:''}
       <dt>Aprobación</dt><dd>${fechaCorta(d.fechaAprobacion)} · ${esc(d.documentoAprobacion||'—')}</dd>
       <dt>Revisión</dt><dd>cada ${esc(d.frecuencia||'—')} meses · próxima ${etiRevision(d)}</dd>
       <dt>Distribución</dt><dd>${esc(d.distribucion)}</dd>
