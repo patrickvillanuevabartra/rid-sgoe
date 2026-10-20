@@ -1112,9 +1112,6 @@ function camposDocumento(v){
       notaF('Nombre oficial, <b>sin el código</b>. Escríbelo como aparecerá en la carátula. No puede repetir el título de otro documento vigente.'), {req:true, completo:true})}
     ${campoF('Tipo de documento', `<select id="dTipo" onchange="previoCodigo()">${opciones(S.cat.tipos.map(t=>({v:t.nombre,t:`${t.nombre} (${t.codigo})`})),v.tipo,'Seleccione')}</select>`,
       origenLista('Tipo de documento'), {req:true})}
-    ${campoF('Proceso', `<select id="dProceso" onchange="previoCodigo()">${opciones(
-        procesosNivel0().map(p=>({v:p.nombre, t:`${p.codigo} · ${p.nombre}`})), DOC_OCULTO.proceso||'', 'Seleccione')}</select>`,
-      notaF('El proceso dueño del documento. Su código entra en el código del documento, tal como lo pide el procedimiento: <b>FI-<u>GCA</u>-PL-001</b>. Solo se elige el proceso principal; no hace falta bajar por niveles.') + origenLista('Proceso'), {req:true})}
     ${campoF('Programa', `<select id="dPrograma">${opciones(S.cat.programas.map(x=>x.nombre),v.programa,'Seleccione')}</select>`,
       origenLista('Programa'))}
     ${campoF('Unidad responsable', `<input type="text" id="dUnidad" value="${esc(v.unidad)}" placeholder="Ej. Comisión de Calidad FI">`,
@@ -1137,7 +1134,8 @@ function camposDocumento(v){
 }
 function leerCamposDocumento(){
   return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value,
-    proceso:($('dProceso') ? $('dProceso').value : (DOC_OCULTO.proceso||'')), programa:$('dPrograma').value,
+    // Proceso deshabilitado por ahora: el documento conserva el que ya tenía.
+    proceso:DOC_OCULTO.proceso||'', programa:$('dPrograma').value,
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
     // Campos retirados del formulario: se conservan tal como estaban (se editan
     // directamente en QuintaDB), nunca se vacían al guardar.
@@ -1152,10 +1150,10 @@ function previoCodigo(){
   const el = $('codPrevio'); if (!el) return;
   const t = S.cat.tipos.find(x=>x.nombre===$('dTipo').value);
   if (!t){ el.textContent = 'Elige el tipo de documento'; return; }
-  const pr = $('dProceso') ? procesosNivel0().find(x=>x.nombre===$('dProceso').value) : null;
-  if (!pr){ el.textContent = 'Elige el proceso y el tipo'; return; }
-  // Mismo orden que el procedimiento: prefijo · proceso · tipo · correlativo.
-  const base = `${S.prefijo}-${pr.codigo}-${t.codigo}-`;
+  // Orden del procedimiento: prefijo · proceso · tipo · correlativo. Con el
+  // proceso deshabilitado, el documento que ya lo tenga lo conserva en su código.
+  const raiz = codigoTramo(segsDe(DOC_OCULTO.proceso||'')[1]);
+  const base = `${S.prefijo}-${raiz?raiz+'-':''}${t.codigo}-`;
   const usados = S.docs.map(d=>d.codigo).concat(S.sols.map(s=>s.codigo)).filter(c=>c.startsWith(base)).map(c=>parseInt(c.slice(base.length))||0);
   el.textContent = base + String(Math.max(0,...usados)+1).padStart(3,'0');
 }
@@ -1879,7 +1877,7 @@ const FICHAS = {
     titulo:'Documentos — correcciones',
     finalidad:'Sirve para corregir <b>datos administrativos</b> de un documento sin crear una versión nueva: el código oficial, un enlace roto, el cambio de responsable, una resolución mal escrita, un título mal tipeado. <br><b>No lo uses si cambia el contenido</b> del documento: para eso está «Solicitar modificación», que pasa por revisión y aprobación. El tipo, el proceso y la versión no se corrigen aquí, porque forman el código del documento. Cada corrección queda en la bitácora con el valor anterior y el nuevo.',
     mostrar:['Código','Título','Versión vigente','Estado','Responsable','Próxima revisión'],
-    soloVer:['Tipo','Proceso','Versión vigente','Estado','Fecha de aprobación'],
+    soloVer:['Tipo','Versión vigente','Estado','Fecha de aprobación'],
     nombreFila:'documento',
     campos:{
       'Código':{ tipo:'texto', req:true, nota:'<b>El código oficial del documento</b>, tal como figura en él: <span class="mono">FI-GCA-DG-001</span>, <span class="mono">FI-GCA-PL-001</span>. Si el documento ya tiene código propio, escríbelo aquí y reemplaza al que generó el sistema, para no tener dos códigos para lo mismo.<br><b>Al cambiarlo, el sistema arrastra el cambio</b> a sus versiones, solicitudes, observaciones y evidencias asociadas, para que el historial no quede huérfano. No puede repetir el de otro documento.' },
