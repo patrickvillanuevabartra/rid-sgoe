@@ -1217,6 +1217,7 @@ function campoArchivo(id, etiqueta, nota, o = {}){
        <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none"
          onchange="subirArchivos('${id}','${o.origen||'documento'}')">
        <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
+       <a href="#" class="sub" onclick="pegarEnlace('${id}');return false">o pegar un enlace</a>
        <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
        <div class="lista-archivos" id="${id}_lista"></div>
        <input type="hidden" id="${id}" value="">
@@ -1265,6 +1266,17 @@ async function subirArchivos(id, origen){
   inp.value = ''; btn.disabled = false;
   pintarArchivos(id);
   if (fallos.length) est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(fallos.join(' · '))}`;
+}
+/* Salida alterna: si el archivo es muy pesado, contiene datos personales o la
+   carga falla, se puede registrar un enlace (Drive, por ejemplo) sin bloquearse. */
+function pegarEnlace(id){
+  const u = prompt('Pega la dirección del archivo (por ejemplo, el enlace de Drive compartido con urp.edu.pe):', '');
+  if (!u || !u.trim()) return;
+  const url = u.trim();
+  if (!/^https?:\/\//i.test(url)){ aviso('El enlace debe empezar con http:// o https://', true); return; }
+  ARCHIVOS[id] = ARCHIVOS[id] || [];
+  ARCHIVOS[id].push({ nombre: url.replace(/^https?:\/\//i,'').slice(0,60), url, mb: '—' });
+  pintarArchivos(id);
 }
 function quitarArchivo(id, i){
   if (i === undefined) ARCHIVOS[id] = []; else (ARCHIVOS[id]||[]).splice(i, 1);
