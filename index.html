@@ -393,6 +393,9 @@ const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega
    aparecer el campo del formulario, la columna de la lista maestra, sus dos
    filtros, la fila de la ficha y el gráfico del tablero. */
 const PROCESO_ACTIVO = false;
+/* Programa deshabilitado hasta nuevo aviso, en el circuito de documentos.
+   En «Registros y evidencias» el campo sigue activo. */
+const PROGRAMA_ACTIVO = false;
 
 /* A quién escribe la persona que no tiene acceso todavía. */
 const CORREO_ACCESO = 'patrick.villanueva@urp.edu.pe';
@@ -819,7 +822,7 @@ function vMaestra(){
     <select id="fTipo">${opciones(S.cat.tipos.map(t=>t.nombre),F.tipo,'Todos los tipos')}</select>
     ${PROCESO_ACTIVO?`<select id="fMacro" title="Tipo de proceso">${opciones(tiposProc,F.macro,'Todos los tipos de proceso')}</select>
     <select id="fProceso" title="Proceso nivel 0">${opciones(S.cat.procesos.filter(x=>!F.macro||x.tipo===F.macro).map(x=>x.etiqueta),F.proceso,'Todos los procesos nivel 0')}</select>`:''}
-    <select id="fPrograma">${opciones(S.cat.programas.map(x=>x.nombre),F.programa,'Todos los programas')}</select>
+    ${PROGRAMA_ACTIVO?`<select id="fPrograma">${opciones(S.cat.programas.map(x=>x.nombre),F.programa,'Todos los programas')}</select>`:''}
     <select id="fEstado">${opciones(S.perfil.registrado?['Vigente','Obsoleto']:['Vigente'],F.estado,'Todos los estados')}</select>
   </div>
   <div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th>${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th><th>Próx. revisión</th><th></th></tr></thead><tbody id="tbMaestra"></tbody></table></div>
@@ -835,7 +838,7 @@ function pintarMaestra(){
   $('tbMaestra').innerHTML = lista.length ? lista.map(d => `
     <tr class="clic" onclick="abrirDocumento('${esc(d.codigo)}')">
       <td class="cod">${esc(d.codigo)}</td>
-      <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${d.programa?' · '+esc(d.programa):''}
+      <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${PROGRAMA_ACTIVO&&d.programa?' · '+esc(d.programa):''}
         ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}${d.origen==='Externo'?' <span class="eti e-neutra">Externo</span>':''}</div></td>
       <td>${esc(d.tipo)}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
       <td class="mono">v${esc(d.version)}</td>
@@ -883,7 +886,7 @@ function pintarFicha(pestana){
       <dt>Estado</dt><dd>${etiEstado(d.estado)}${d.fechaBaja?` <span class="sub">desde ${fechaCorta(d.fechaBaja)}</span>`:''}</dd>
       <dt>Tipo</dt><dd>${esc(d.tipo)} · ${esc(d.origen)}</dd>
       ${PROCESO_ACTIVO?`<dt>Proceso</dt><dd>${esc(rutaLegible(d.proceso))}</dd>`:''}
-      <dt>Programa</dt><dd>${esc(d.programa||'—')}</dd>
+      ${PROGRAMA_ACTIVO?`<dt>Programa</dt><dd>${esc(d.programa||'—')}</dd>`:''}
       <dt>Unidad responsable</dt><dd>${esc(d.unidad||'—')}</dd>
       <dt>Responsable</dt><dd>${esc(d.responsable||'—')}${d.cargoResponsable?` · ${esc(d.cargoResponsable)}`:''}${d.correoResponsable?` <span class="sub">${esc(d.correoResponsable)}</span>`:''}</dd>
       ${d.fuente?`<dt>Emite</dt><dd>${esc(d.fuente)}</dd>`:''}
@@ -1110,15 +1113,15 @@ let DOC_OCULTO = {};   // valores que el formulario ya no muestra pero debe pres
 function camposDocumento(v){
   DOC_OCULTO = { objetivo:v.objetivo, clausulas:v.clausulas, frecuencia:v.frecuencia, palabras:v.palabras,
     enlaceEditable:v.enlaceEditable, clase:v.clase, ubicacion:v.ubicacion,
-    proceso:v.proceso, macroproceso:v.macroproceso };
+    proceso:v.proceso, macroproceso:v.macroproceso, programa:v.programa };
   const cl = (v.clausulas||'').split(';').map(x=>x.trim());
   return `<div class="campos">
     ${campoF('Título del documento', `<input type="text" id="dTitulo" value="${esc(v.titulo)}" placeholder="Ej. Guía de docentes">`,
       notaF('Nombre oficial, <b>sin el código</b>. Escríbelo como aparecerá en la carátula. No puede repetir el título de otro documento vigente.'), {req:true, completo:true})}
     ${campoF('Tipo de documento', `<select id="dTipo" onchange="previoCodigo()">${opciones(S.cat.tipos.map(t=>({v:t.nombre,t:`${t.nombre} (${t.codigo})`})),v.tipo,'Seleccione')}</select>`,
       origenLista('Tipo de documento'), {req:true})}
-    ${campoF('Programa', `<select id="dPrograma">${opciones(S.cat.programas.map(x=>x.nombre),v.programa,'Seleccione')}</select>`,
-      origenLista('Programa'))}
+    ${PROGRAMA_ACTIVO?campoF('Programa', `<select id="dPrograma">${opciones(S.cat.programas.map(x=>x.nombre),v.programa,'Seleccione')}</select>`,
+      origenLista('Programa')):''}
     ${campoF('Unidad responsable', `<input type="text" id="dUnidad" value="${esc(v.unidad)}" placeholder="Ej. Comisión de Calidad FI">`,
       notaF('Órgano que responde por el documento: decanato, comisión, coordinación o dirección de escuela.'))}
     ${campoF('Responsable del documento', `<input type="text" id="dResponsable" value="${esc(v.responsable)}" placeholder="Apellidos, Nombres">`,
@@ -1140,7 +1143,7 @@ function camposDocumento(v){
 function leerCamposDocumento(){
   return { titulo:$('dTitulo').value.trim(), tipo:$('dTipo').value,
     // Proceso deshabilitado por ahora: el documento conserva el que ya tenía.
-    proceso:DOC_OCULTO.proceso||'', programa:$('dPrograma').value,
+    proceso:DOC_OCULTO.proceso||'', programa:($('dPrograma') ? $('dPrograma').value : (DOC_OCULTO.programa||'')),
     unidad:$('dUnidad').value.trim(), responsable:$('dResponsable').value.trim(), correoResponsable:$('dCorreoResp').value.trim().toLowerCase(),
     // Campos retirados del formulario: se conservan tal como estaban (se editan
     // directamente en QuintaDB), nunca se vacían al guardar.
@@ -1859,6 +1862,12 @@ const DESC_ROLES = {
   'Lector':'Solo consulta: ve la lista maestra, abre las fichas y descarga los documentos vigentes. No solicita, no registra, no revisa ni aprueba. Es el rol para dar acceso de lectura a quien necesita consultar el repositorio.'
 };
 
+/* Los campos deshabilitados salen también del formulario de correcciones.
+   Al volver a activarlos arriba, reaparecen solos. */
+function depurarFichas_(){
+  if (!PROGRAMA_ACTIVO && FICHAS.documentos) delete FICHAS.documentos.campos['Programa'];
+}
+
 const FICHAS = {
   catalogos: {
     titulo:'Catálogos — opciones de las listas desplegables',
@@ -1952,6 +1961,7 @@ const FICHAS = {
     mostrar:['Fecha y hora','Nombre','Acción','Código','Detalle']
   }
 };
+depurarFichas_();
 
 /* ---------------------------------------------- requisitos previos
    Varias listas desplegables se alimentan de otros formularios. Cada campo
