@@ -63,6 +63,13 @@ main{max-width:1240px;margin:0 auto;padding:20px}
   color:#fff;background:var(--brand);border-radius:20px;padding:2px 9px;min-width:26px;text-align:center}
 .arch-fila a{color:var(--brand-oscuro)}
 .arch-fila a.quitar{color:var(--falla)}
+.campo-varios{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.varios-filas{display:flex;flex-direction:column;gap:6px;width:100%}
+.varios-fila{display:flex;gap:7px;align-items:center}
+.varios-fila input{flex:1}
+.quita-linea{border:1px solid var(--linea);background:#fff;border-radius:8px;width:34px;height:34px;
+  font-size:19px;line-height:1;color:var(--falla);cursor:pointer}
+.quita-linea:hover{background:#fdeaea}
 .btn.n{background:transparent;color:var(--tinta-media);border-color:var(--linea)}
 .btn.rojo{background:var(--falla);border-color:var(--falla)}
 .btn.ambar{background:var(--parcial);border-color:var(--parcial)}
@@ -1166,6 +1173,40 @@ function selectorFlujo(){
    URL que este devuelve. El input con el id de siempre se conserva oculto,
    porque todo lo demás sigue leyendo su valor: lo único que cambia es que esa
    URL ya no se pega a mano. */
+/* Campo de varias líneas: un valor por renglón, con botón para agregar otro.
+   Se guarda como un solo texto separado por «; », que es como ya venían
+   escritos los documentos cargados a mano. */
+function campoVarios(id, marca){
+  return `<div class="campo-varios" id="${id}_caja">
+      <div class="varios-filas" id="${id}_filas"></div>
+      <button type="button" class="btn g sm" onclick="agregarLinea('${id}','${esc(marca||'')}')">+ Añadir revisor</button>
+      <input type="hidden" id="${id}" value="">
+    </div>`;
+}
+function agregarLinea(id, marca, valor){
+  const cont = $(id+'_filas'); if (!cont) return;
+  const fila = document.createElement('div');
+  fila.className = 'varios-fila';
+  const n = cont.children.length;
+  fila.innerHTML = `<input type="text" placeholder="${esc(marca||'')}" value="${esc(valor||'')}">
+    <button type="button" class="quita-linea" title="Quitar esta línea">×</button>`;
+  fila.querySelector('.quita-linea').onclick = () => { fila.remove(); if (!cont.children.length) agregarLinea(id, marca); };
+  cont.appendChild(fila);
+  if (!valor && n) fila.querySelector('input').focus();
+}
+function leerVarios(id){
+  const cont = $(id+'_filas'); if (!cont) return ($(id) ? $(id).value.trim() : '');
+  return [...cont.querySelectorAll('input')].map(i=>i.value.trim()).filter(Boolean).join('; ');
+}
+/* Al abrir el formulario, una línea por cada valor ya guardado. */
+function sembrarVarios(id, texto, marca){
+  const cont = $(id+'_filas'); if (!cont) return;
+  cont.innerHTML = '';
+  const partes = String(texto||'').split(';').map(x=>x.trim()).filter(Boolean);
+  if (!partes.length) agregarLinea(id, marca);
+  else partes.forEach(v => agregarLinea(id, marca, v));
+}
+
 const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip';
 /* Tope real de la cadena navegador → Worker → Apps Script → QuintaDB.
    El archivo viaja codificado en base64, que lo engorda un tercio, y Apps
@@ -1277,7 +1318,8 @@ function formDocumento(modo, codigo){
         ${campoF('Fecha de aprobación', `<input type="date" id="eFecha">`, notaF('La fecha de la resolución o acta. Con ella y la frecuencia se calcula la próxima revisión.'), {req:true})}
         ${campoF('Documento de aprobación', `<input type="text" id="eDocAprob" placeholder="Ej. Resolución de Decanato N.° 123-2026">`, notaF('Número de la resolución, acta u oficio que lo aprobó.'))}
         ${campoF('Elaboró', `<input type="text" id="eElaboro">`, notaF('Quién lo redactó, si se sabe.'))}
-        ${campoF('Revisó', `<input type="text" id="eReviso">`, notaF('Quién lo revisó, si se sabe.'))}
+        ${campoF('Revisó', campoVarios('eReviso', 'Ej. Ing. Patricia Vega Denegri'),
+          notaF('Quién lo revisó. El procedimiento contempla <b>dos revisiones</b>: la de cumplimiento documental, a cargo de la Jefatura de la Unidad de Calidad, y la de contenido técnico, a cargo del dueño del proceso. Usa <b>+ Añadir revisor</b> para registrar cada una en su propia línea.'), {completo:true})}
         ${campoF('Aprobó', `<input type="text" id="eAprobo">`, notaF('Autoridad que lo aprobó.'))}
         ${campoArchivo('eEnlace', 'Archivo del documento aprobado',
           notaF('El PDF firmado. Si el documento viene con anexos, cárgalos aquí también: el primero de la lista es el que se verá en el visor. Máximo 25 MB por archivo.'), {completo:true, origen:'documento'})}
@@ -1287,6 +1329,8 @@ function formDocumento(modo, codigo){
     <div class="modal-cuerpo">${modo!=='existente'?tiraFlujo(0):''}<div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">${finalidad}</div></div>${html}</div>
     <div class="modal-pie"><button class="btn n" onclick="${codigo?`abrirDocumento('${esc(codigo)}')`:'cerrarModal()'}">Cancelar</button>
     <button class="btn" onclick="enviarDocumento('${modo}','${esc(codigo||'')}')">${modo==='existente'?'Registrar como vigente':'Iniciar flujo de aprobación'}</button></div>`);
+  // El campo de revisores arranca con una línea vacía (o con las que ya había).
+  if (modo === 'existente') setTimeout(() => sembrarVarios('eReviso', '', 'Ej. Ing. Patricia Vega Denegri'), 0);
 }
 
 async function enviarDocumento(modo, codigo){
@@ -1294,7 +1338,7 @@ async function enviarDocumento(modo, codigo){
     if (modo==='existente'){
       const datos = Object.assign(leerCamposDocumento(), { codigo:$('eCodigo').value.trim(), version:$('eVersion').value.trim(),
         fechaAprobacion:$('eFecha').value, documentoAprobacion:$('eDocAprob').value.trim(), elaborado:$('eElaboro').value.trim(),
-        revisado:$('eReviso').value.trim(), aprobado:$('eAprobo').value.trim(), enlace:$('eEnlace').value.trim() });
+        revisado:leerVarios('eReviso'), aprobado:$('eAprobo').value.trim(), enlace:$('eEnlace').value.trim() });
       const r = await api('/documento-existente', { datos });
       aviso('Registrado como vigente: ' + r.codigo); cerrarModal(); await recargar(); mostrar('maestra'); return;
     }
