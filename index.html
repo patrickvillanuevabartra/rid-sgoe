@@ -1213,6 +1213,12 @@ function sembrarVarios(id, texto, marca){
   else partes.forEach(v => agregarLinea(id, marca, v));
 }
 
+/* Qué hacer cuando el archivo no cabe. Se dice igual en la nota de cada campo
+   y en el aviso de error, para que nadie improvise subiéndolo a su Drive. */
+const NOTA_PESADO = '<b>¿Pesa más de 25 MB?</b> Súbelo a la carpeta <b>«RID-SGOE — Archivos del repositorio»</b> del Drive del SGOE '
+  + '(la cuenta fisgoe, <b>no tu Drive personal</b>): ahí ya está compartida con urp.edu.pe y el archivo hereda el permiso solo. '
+  + 'Arrástralo dentro, clic derecho → <b>Obtener enlace</b> → <b>Copiar enlace</b>, y pégalo cuando el sistema te lo pida.';
+
 const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip';
 /* Tope real de la cadena navegador → Worker → Apps Script → QuintaDB.
    El archivo viaja codificado en base64, que lo engorda un tercio, y Apps
@@ -1225,7 +1231,6 @@ function campoArchivo(id, etiqueta, nota, o = {}){
        <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none"
          onchange="subirArchivos('${id}','${o.origen||'documento'}')">
        <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
-       <a href="#" class="sub" onclick="pegarEnlace('${id}');return false">o pegar un enlace</a>
        <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
        <div class="lista-archivos" id="${id}_lista"></div>
        <input type="hidden" id="${id}" value="">
@@ -1262,7 +1267,7 @@ async function subirArchivos(id, origen){
   for (let n = 0; n < elegidos.length; n++){
     const f = elegidos[n], mb = f.size / 1048576;
     est.textContent = `Subiendo ${f.name} (${n+1} de ${elegidos.length})…`;
-    if (mb > MAX_MB){ fallos.push(`${f.name}: pesa ${mb.toFixed(1)} MB y el máximo es ${MAX_MB} MB`); continue; }
+    if (mb > MAX_MB){ fallos.push(`${f.name} pesa ${mb.toFixed(1)} MB y el máximo por archivo es ${MAX_MB} MB`); continue; }
     try{
       const base64 = await leerBase64(f);
       const r = await api('/archivo', { nombre:f.name, base64, origen:origen||'documento',
@@ -1274,7 +1279,12 @@ async function subirArchivos(id, origen){
   }
   inp.value = ''; btn.disabled = false;
   pintarArchivos(id);
-  if (fallos.length) est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(fallos.join(' · '))}`;
+  if (fallos.length){
+    // Solo aquí tiene sentido ofrecer el enlace: el archivo no cabe o la carga
+    // falló. En el uso normal el formulario muestra un único botón.
+    est.innerHTML = `<b style="color:var(--falla)">No se pudo subir:</b> ${esc(fallos.join(' · '))}.<br>`
+      + NOTA_PESADO + ` <a href="#" onclick="pegarEnlace('${id}');return false"><b>Pegar el enlace aquí →</b></a>`;
+  }
 }
 /* Salida alterna: si el archivo es muy pesado, contiene datos personales o la
    carga falla, se puede registrar un enlace (Drive, por ejemplo) sin bloquearse. */
@@ -1296,7 +1306,7 @@ function primerArchivo(id, i){
   l.unshift(l.splice(i, 1)[0]); pintarArchivos(id);
 }
 const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
-  notaF('Pulsa <b>Cargar archivos</b> y elige el borrador desde tu computadora. Se guarda en la carpeta del repositorio en Drive y el sistema lo comparte solo con <b>urp.edu.pe</b>: ya no tienes que compartirlo tú. Puedes elegir <b>varios archivos a la vez</b>; el primero es el que se abre en el visor y el orden se puede cambiar. Formatos: PDF, Word, Excel, PowerPoint, imagen o ZIP. Máximo 25 MB por archivo.'),
+  notaF('Pulsa <b>Cargar archivos</b> y elige el borrador desde tu computadora. Se guarda en la carpeta del repositorio en Drive y el sistema lo comparte solo con <b>urp.edu.pe</b>: ya no tienes que compartirlo tú. Puedes elegir <b>varios archivos a la vez</b>; el primero es el que se abre en el visor y el orden se puede cambiar. Formatos: PDF, Word, Excel, PowerPoint, imagen o ZIP. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ''),
   {req:true, completo:true, origen:'borrador'});
 
 function formDocumento(modo, codigo){
@@ -1341,7 +1351,7 @@ function formDocumento(modo, codigo){
           notaF('Quién lo revisó. El procedimiento contempla <b>dos revisiones</b>: la de cumplimiento documental, a cargo de la Jefatura de la Unidad de Calidad, y la de contenido técnico, a cargo del dueño del proceso. Usa <b>+ Añadir revisor</b> para registrar cada una en su propia línea.'), {completo:true})}
         ${campoF('Aprobó', `<input type="text" id="eAprobo">`, notaF('Autoridad que lo aprobó.'))}
         ${campoArchivo('eEnlace', 'Archivo del documento aprobado',
-          notaF('El PDF firmado. Si el documento viene con anexos, cárgalos aquí también: el primero de la lista es el que se verá en el visor. Se comparte solo con <b>urp.edu.pe</b>. Máximo 25 MB por archivo.'), {completo:true, origen:'documento'})}
+          notaF('El PDF firmado. Si el documento viene con anexos, cárgalos aquí también: el primero de la lista es el que se verá en el visor. Se comparte solo con <b>urp.edu.pe</b>. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ''), {completo:true, origen:'documento'})}
       </div><h3 class="sec-form">Ficha del documento</h3>${camposDocumento({})}`;
   }
   modal(`<div class="modal-cab"><h2 style="flex:1">${esc(titulo)}</h2><button class="cerrar" onclick="cerrarModal()">×</button></div>
@@ -1690,7 +1700,7 @@ function formRegistro(modelo){
     ${campoF('Descripción', `<textarea id="gDesc" placeholder="Qué contiene la evidencia">${esc(modelo.descripcion||'')}</textarea>`,
       notaF('Qué contiene <b>esta</b> evidencia en particular. No repitas lo que ya dicen el formato, el programa y el periodo: escribe lo que la distingue de las demás. Ej.: «Acta de la 3.ª sesión: se aprueba el alcance del SGOE y se asignan responsables de los nueve procesos; 7 asistentes». Si dos descripciones son idénticas, no se podrá saber cuál evidencia es cuál al buscar.'), {req:true, completo:true})}
     ${campoArchivo('gEnlace', 'Archivo de la evidencia',
-      notaF('Pulsa <b>Cargar archivos</b> y elige el acta, la lista de asistencia y lo que acompañe a la evidencia: puedes seleccionar varios de una vez. Máximo 25 MB por archivo. Se guarda en Drive compartido solo con <b>urp.edu.pe</b>, así que sirve también para evidencias con datos de estudiantes.'), {req:true, completo:true, origen:'evidencia'})}
+      notaF('Pulsa <b>Cargar archivos</b> y elige el acta, la lista de asistencia y lo que acompañe a la evidencia: puedes seleccionar varios de una vez. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ' Se guarda en Drive compartido solo con <b>urp.edu.pe</b>, así que sirve también para evidencias con datos de estudiantes.'), {req:true, completo:true, origen:'evidencia'})}
     ${campoF('Retención (años)', `<input type="number" id="gRet" min="1" max="50" value="${esc(modelo.retencion||'5')}">`,
       notaF('Cuántos años debe guardarse. Si no hay una regla institucional, <b>5 años</b> es una práctica común (cubre un ciclo de acreditación). El sistema calcula la fecha límite.'))}
     ${campoF('Disposición final', `<select id="gDisp">${opciones(DISPOSICION,modelo.disposicion||'Evaluar al vencer')}</select>`,
@@ -1918,7 +1928,7 @@ const FICHAS = {
       'Fuente / emisor':{ tipo:'texto', nota:'Solo documentos externos: quién lo emite.' },
       'Medio':{ tipo:'lista', opciones:['Digital','Digital y físico'] },
       'Documento de aprobación':{ tipo:'texto' },
-      'Enlace documento':{ tipo:'archivo', nota:'El archivo oficial del documento. Cárgalo desde tu computadora: se guarda en Drive y se comparte solo con urp.edu.pe. Si prefieres apuntar a un archivo que ya está en Drive, usa «o pegar un enlace».' },
+      'Enlace documento':{ tipo:'archivo', nota:'El archivo oficial del documento. Cárgalo desde tu computadora: se guarda en Drive y se comparte solo con urp.edu.pe. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + '' },
     }
   },
   registros: {
@@ -2195,7 +2205,6 @@ function formAdmin(t, recordId){
       return `<div class="carga-archivo">
          <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none" onchange="subirArchivos('${id}','documento')">
          <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
-         <a href="#" class="sub" onclick="pegarEnlace('${id}');return false">o pegar un enlace</a>
          <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
          <div class="lista-archivos" id="${id}_lista"></div>
          <input type="hidden" id="${id}" value="${esc(v)}">
