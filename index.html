@@ -1904,7 +1904,7 @@ const FICHAS = {
       'Fuente / emisor':{ tipo:'texto', nota:'Solo documentos externos: quién lo emite.' },
       'Medio':{ tipo:'lista', opciones:['Digital','Digital y físico'] },
       'Documento de aprobación':{ tipo:'texto' },
-      'Enlace documento':{ tipo:'url', nota:'Dirección del archivo oficial. Normalmente se llena sola al cargar el archivo desde el formulario; aquí solo se corrige si quedó mal o si quieres apuntar a un archivo en Drive.' },
+      'Enlace documento':{ tipo:'archivo', nota:'El archivo oficial del documento. Cárgalo desde tu computadora: se guarda en Drive y se comparte solo con urp.edu.pe. Si prefieres apuntar a un archivo que ya está en Drive, usa «o pegar un enlace».' },
     }
   },
   registros: {
@@ -2173,6 +2173,19 @@ function formAdmin(t, recordId){
     if (spec.tipo === 'lista') return `<select id="${id}">${opciones(spec.opciones, v, 'Seleccione')}</select>`;
     if (spec.tipo === 'catalogo') return `<select id="${id}">${opciones(S.cat[spec.categoria].map(x=>x.nombre), v, 'Seleccione')}</select>`;
     if (spec.tipo === 'area') return `<textarea id="${id}">${esc(v)}</textarea>`;
+    // Campo de archivo dentro de las correcciones: mismo botón que en los
+    // formularios, para no tener que ir a buscar un enlace a mano.
+    if (spec.tipo === 'archivo'){
+      setTimeout(() => { ARCHIVOS[id] = listaEnlaces(v).map(u => ({ nombre:u.replace(/^https?:\/\//i,'').slice(0,60), url:u, mb:'—' })); pintarArchivos(id); }, 0);
+      return `<div class="carga-archivo">
+         <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none" onchange="subirArchivos('${id}','documento')">
+         <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
+         <a href="#" class="sub" onclick="pegarEnlace('${id}');return false">o pegar un enlace</a>
+         <span class="sub" id="${id}_estado">Ningún archivo cargado todavía</span>
+         <div class="lista-archivos" id="${id}_lista"></div>
+         <input type="hidden" id="${id}" value="${esc(v)}">
+       </div>`;
+    }
     if (spec.tipo === 'fecha') return `<input type="date" id="${id}" value="${esc(v)}">`;
     if (spec.tipo === 'formato'){
       const formatos = S.docs.filter(x => x.estado==='Vigente' && /formato|matriz/i.test(x.tipo));
