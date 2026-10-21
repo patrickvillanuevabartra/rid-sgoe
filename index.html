@@ -577,19 +577,28 @@ function renovarSesion(){
 async function api(ruta, cuerpo, intento){
   intento = intento || 0;
   cargando(true);
+  // Subir un archivo NO se reintenta: si la primera llamada llegó a guardar y
+  // solo se perdió la respuesta, el reintento crea un duplicado en Drive. Por
+  // eso además se le da más tiempo, que guardar un archivo tarda.
+  const subida = (ruta === '/archivo');
   try{
     const ctrl = new AbortController();
-    const reloj = setTimeout(() => ctrl.abort(), 45000);
+    const reloj = setTimeout(() => ctrl.abort(), subida ? 180000 : 45000);
     let texto;
     try{
       const r = await fetch(CFG.API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({ ruta, cred:S.cred, cuerpo: cuerpo||{} }), signal: ctrl.signal });
       texto = await r.text();
     }catch(e){
+      const avisoSubida = 'Se perdió la conexión mientras se guardaba el archivo. '
+        + 'Puede que SÍ se haya guardado: revisa la carpeta del SGOE en Drive antes de volver a subirlo, '
+        + 'para no dejar dos copias del mismo documento.';
       if (e.name === 'AbortError'){
+        if (subida) throw new Error(avisoSubida);
         if (intento < 1){ await pausa(800); return api(ruta, cuerpo, intento+1); }
         throw new Error('El servidor tardó demasiado en responder. Espera unos segundos y vuelve a intentar.');
       }
+      if (subida) throw new Error(avisoSubida);
       if (intento < 1){ await pausa(800); return api(ruta, cuerpo, intento+1); }
       throw new Error('No se pudo conectar con el repositorio. Revisa tu conexión y vuelve a intentar.');
     }finally{ clearTimeout(reloj); }
@@ -599,7 +608,7 @@ async function api(ruta, cuerpo, intento){
     catch(e){
       // El puente devolvió una página HTML (reinicio del Worker, tope de Google
       // o implementación del Apps Script sin acceso público). Se reintenta una vez.
-      if (intento < 1){ await pausa(1200); return api(ruta, cuerpo, intento+1); }
+      if (!subida && intento < 1){ await pausa(1200); return api(ruta, cuerpo, intento+1); }
       throw new Error('El puente respondió con una página web en lugar de datos. Suele resolverse volviendo a intentar; si persiste, revisa en el Apps Script que la implementación siga publicada con acceso «cualquier usuario».');
     }
 
