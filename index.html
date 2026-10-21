@@ -799,7 +799,7 @@ function vTablero(){
     <div class="caja"><h3>Vigentes por tipo de documento</h3><div class="barras">${barras('tipo', S.cat.tipos.map(t=>t.nombre))}</div></div>
     ${S.perfil.control ? `<div style="grid-column:1/-1">${desplegable('Puesta en marcha · orden de llenado', puestaEnMarcha().html, puestaEnMarcha().faltan ? `${puestaEnMarcha().faltan} pendiente(s)` : 'Completa', !puestaEnMarcha().faltan)}</div>` : ''}
     <div class="caja" style="grid-column:1/-1"><h3>Aprobados recientemente</h3>${recientes.length?`<div class="lista-tareas">${recientes.map(d=>`
-      <div class="tarea" onclick="abrirDocumento('${esc(d.codigo)}')"><span class="cod" style="width:130px">${esc(d.codigo)}</span><div style="flex:1" class="t-tit">${esc(d.titulo)}</div><span class="sub mono">v${esc(d.version)} · ${fechaCorta(d.fechaAprobacion)}</span></div>`).join('')}</div>`:`<div class="vacio">Aún no hay documentos registrados.${S.perfil.puede.registrarExistente?'<br><span class="sub">Empieza por «Lista maestra → Registrar documento ya aprobado» con la Política de calidad, el Alcance y las guías.</span>':''}</div>`}</div>
+      <div class="tarea" onclick="abrirDocumento('${esc(d.codigo)}')"><span class="cod" style="width:130px">${esc(d.codigo)}</span><div style="flex:1" class="t-tit">${esc(d.titulo)}</div><span class="sub mono">v${esc(ver(d.version))} · ${fechaCorta(d.fechaAprobacion)}</span></div>`).join('')}</div>`:`<div class="vacio">Aún no hay documentos registrados.${S.perfil.puede.registrarExistente?'<br><span class="sub">Empieza por «Lista maestra → Registrar documento ya aprobado» con la Política de calidad, el Alcance y las guías.</span>':''}</div>`}</div>
   </div>`;
 }
 
@@ -850,7 +850,7 @@ function pintarMaestra(){
       <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${PROGRAMA_ACTIVO&&d.programa?' · '+esc(d.programa):''}
         ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}${d.origen==='Externo'?' <span class="eti e-neutra">Externo</span>':''}</div></td>
       <td>${esc(d.tipo)}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
-      <td class="mono">v${esc(d.version)}</td>
+      <td class="mono">v${esc(ver(d.version))}</td>
       <td>${etiEstado(d.estado)}${d.solicitudEnCurso?'<div style="margin-top:3px"><span class="eti e-flujo">En actualización</span></div>':''}${S.obsAbiertas[d.codigo]?`<div class="sub" style="margin-top:3px">${S.obsAbiertas[d.codigo]} observ. abierta(s)</div>`:''}</td>
       ${REVISION_ACTIVA?`<td>${etiRevision(d)}</td>`:''}
       <td style="white-space:nowrap"><button class="btn g sm" onclick="event.stopPropagation();abrirDocumento('${esc(d.codigo)}')">Ver</button>
@@ -891,7 +891,7 @@ function pintarFicha(pestana){
     ${d.solicitudEnCurso?`<div class="aviso-caja info">Este documento tiene la solicitud <b class="mono">${esc(d.solicitudEnCurso)}</b> en curso. La versión vigente sigue siendo la oficial hasta su aprobación.</div>`:''}
     <dl class="meta">
       <dt>Código</dt><dd class="cod">${esc(d.codigo)}</dd>
-      <dt>Versión vigente</dt><dd class="mono">v${esc(d.version)}</dd>
+      <dt>Versión vigente</dt><dd class="mono">v${esc(ver(d.version))}</dd>
       <dt>Estado</dt><dd>${etiEstado(d.estado)}${d.fechaBaja?` <span class="sub">desde ${fechaCorta(d.fechaBaja)}</span>`:''}</dd>
       <dt>Tipo</dt><dd>${esc(d.tipo)} · ${esc(d.origen)}</dd>
       ${PROCESO_ACTIVO?`<dt>Proceso</dt><dd>${esc(rutaLegible(d.proceso))}</dd>`:''}
@@ -908,7 +908,7 @@ function pintarFicha(pestana){
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
   if (pestana==='versiones') cuerpo = versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
-    <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(v.version)}</b> ${etiEstado(v.estado==='Obsoleta'?'Obsoleto':v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
+    <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(ver(v.version))}</b> ${etiEstado(v.estado==='Obsoleta'?'Obsoleto':v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
     <div class="h-txt">${esc(v.descripcion)}</div>
     <div class="sub">Elaboró: ${esc(v.elaborado||'—')} · Revisó: ${esc(v.revisado||'—')} · Aprobó: ${esc(v.aprobado||'—')} · ${esc(v.documentoAprobacion||'')}${v.solicitud?` · <span class="mono">${esc(v.solicitud)}</span>`:''}
     ${v.enlace?` · <a href="${esc(v.enlace)}" target="_blank" rel="noopener">archivo</a>`:''}</div></div>`).join('')}</div>` : '<div class="vacio">Sin historial de versiones.</div>';
@@ -926,14 +926,14 @@ function pintarFicha(pestana){
       ${o.estado!=='Atendida' && (S.perfil.control || d.correoResponsable===S.perfil.correo || puedeGestionarProc(d))?`<div style="margin-top:6px"><button class="btn g sm" onclick="atenderObservacion('${esc(o.id)}','${esc(d.codigo)}')">Registrar atención</button></div>`:''}
     </div>`).join('') : '<div class="vacio">Sin observaciones registradas.<br><span class="sub">Usa el recuadro de arriba para dejar un hallazgo, una recomendación o una no conformidad sobre este documento.</span></div>'}`;
   if (pestana==='flujo') cuerpo = solicitudes.length ? `<table><thead><tr><th>Solicitud</th><th>Tipo</th><th>Etapa</th><th>Fecha</th></tr></thead><tbody>${solicitudes.map(s=>`
-    <tr class="clic" onclick="abrirSolicitud('${esc(s.id)}')"><td class="cod">${esc(s.id)}</td><td>${esc(s.tipo)}${s.versionPropuesta?' · v'+esc(s.versionPropuesta):''}</td><td>${etiEstado(s.etapa)}</td><td class="sub">${fechaCorta(s.fecha)}</td></tr>`).join('')}</tbody></table>` : '<div class="vacio">Sin solicitudes.</div>';
+    <tr class="clic" onclick="abrirSolicitud('${esc(s.id)}')"><td class="cod">${esc(s.id)}</td><td>${esc(s.tipo)}${s.versionPropuesta?' · v'+esc(ver(s.versionPropuesta)):''}</td><td>${etiEstado(s.etapa)}</td><td class="sub">${fechaCorta(s.fecha)}</td></tr>`).join('')}</tbody></table>` : '<div class="vacio">Sin solicitudes.</div>';
 
   modal(`
-    <div class="modal-cab"><div style="flex:1;min-width:0"><div class="sub"><span class="cod">${esc(d.codigo)}</span> · v${esc(d.version)} · ${esc(d.tipo)}</div><h2>${esc(d.titulo)}</h2></div>
+    <div class="modal-cab"><div style="flex:1;min-width:0"><div class="sub"><span class="cod">${esc(d.codigo)}</span> · v${esc(ver(d.version))} · ${esc(d.tipo)}</div><h2>${esc(d.titulo)}</h2></div>
       <button class="cerrar no-imprimir" onclick="cerrarModal()">×</button></div>
     <div class="ficha">
       <div class="visor">
-        <div class="visor-banda ${obsoleto?'obsoleto':''}"><span>${obsoleto?'Documento obsoleto · solo referencia':'Copia controlada · vigente'}</span><span class="espacio"></span><span class="mono" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(d.codigo)} v${esc(d.version)} · ${fechaCorta(S.hoy)}</span></div>
+        <div class="visor-banda ${obsoleto?'obsoleto':''}"><span>${obsoleto?'Documento obsoleto · solo referencia':'Copia controlada · vigente'}</span><span class="espacio"></span><span class="mono" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(d.codigo)} v${esc(ver(d.version))} · ${fechaCorta(S.hoy)}</span></div>
         <div class="visor-marco">${previa?`<iframe src="${esc(previa)}" allow="autoplay" loading="lazy"></iframe><div class="marca-agua ${obsoleto?'obsoleto':''}">${obsoleto?'<span>OBSOLETO</span>':''}</div>`:'<div class="sin-archivo">Este documento aún no tiene archivo enlazado.<br>Control documental debe registrar el enlace de Drive.</div>'}</div>
       </div>
       <div class="panel">
@@ -1106,7 +1106,16 @@ const notaF = html => `<div class="nota-campo">${html}</div>`;
 function siguienteVersion(actual){
   let v = parseFloat(String(actual||'').replace(',','.'));
   if (!isFinite(v) || v < 1) v = 1;
-  return (Math.floor(v)+1).toFixed(1);
+  return String(Math.floor(v)+1);
+}
+
+/* Las versiones se muestran como enteros: 1, 2, 3. Los «1.0» y «2.0» que
+   quedaron de la numeración anterior se ven limpios aunque estén así guardados. */
+function ver(v){
+  const t = String(v==null?'':v).trim().replace(',','.');
+  if (!t) return '';
+  const n = parseFloat(t);
+  return isFinite(n) ? String(Math.round(n)) : t;
 }
 
 /* Procesos de nivel 0: son los que aportan su código al código del documento
@@ -1362,7 +1371,7 @@ function formDocumento(modo, codigo){
   } else if (modo==='Modificación'){
     titulo = `Actualizar · ${doc.codigo}`;
     finalidad = `Con este formulario <b>propones una versión nueva</b> de «${esc(doc.titulo)}». La versión vigente (<span class="mono">v${esc(doc.version)}</span>) sigue siendo la oficial hasta que se apruebe la actualización. Cambia solo los datos que correspondan: los que modifiques se resaltarán para el revisor.`;
-    html = `<div class="campos">${campoF('Versión', `<div class="salto-version"><span class="mono">v${esc(doc.version||'1.0')}</span> <span class="flecha">→</span> <b class="mono">v${siguienteVersion(doc.version)}</b></div>`,
+    html = `<div class="campos">${campoF('Versión', `<div class="salto-version"><span class="mono">v${esc(ver(doc.version)||'1')}</span> <span class="flecha">→</span> <b class="mono">v${siguienteVersion(doc.version)}</b></div>`,
         notaF('El sistema asigna la versión: cada actualización aprobada sube un número entero. No hay que escribirla ni elegir entre cambio mayor y menor.'), {completo:true})}</div>
       <h3 class="sec-form">Ficha del documento</h3>${camposDocumento(doc)}
       <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Archivo del borrador actualizado')}
@@ -1381,7 +1390,7 @@ function formDocumento(modo, codigo){
     html = `<h3 class="sec-form">Datos de la aprobación que ya existe</h3><div class="campos">
         ${campoF('Código existente', `<input type="text" id="eCodigo" class="mono" placeholder="Vacío = lo genera el sistema">`,
           notaF('Si el documento ya tiene un código oficial impreso, escríbelo tal cual para respetarlo. Si no tiene, déjalo vacío y el sistema lo asigna.'))}
-        ${campoF('Versión', `<input type="text" id="eVersion" value="1.0">`, notaF('La versión que figura en el documento aprobado. Si no figura ninguna, deja 1.0.'), {req:true})}
+        ${campoF('Versión', `<input type="text" id="eVersion" value="1">`, notaF('La versión que figura en el documento aprobado, en número entero: 1, 2, 3. Si no figura ninguna, deja 1.'), {req:true})}
         ${campoF('Fecha de aprobación', `<input type="date" id="eFecha">`, notaF('La fecha de la resolución o acta. Con ella y la frecuencia se calcula la próxima revisión.'), {req:true})}
         ${campoF('Documento de aprobación', `<input type="text" id="eDocAprob" placeholder="Ej. Resolución de Decanato N.° 123-2026">`, notaF('Número de la resolución, acta u oficio que lo aprobó.'))}
         ${campoF('Elaboró', `<input type="text" id="eElaboro">`, notaF('Quién lo redactó, si se sabe.'))}
@@ -1465,7 +1474,7 @@ function vFlujo(){
     const abierta = ['En revisión','En aprobación','Observada'].includes(s.etapa);
     return `<tr class="clic" onclick="abrirSolicitud('${esc(s.id)}')"><td class="cod">${esc(s.id)}</td>
       <td><div style="font-weight:500">${esc(s.titulo)}</div><div class="sub mono">${esc(s.codigo)}</div></td>
-      <td>${esc(s.tipo)}${s.versionPropuesta?` <span class="sub mono">→ v${esc(s.versionPropuesta)}</span>`:''}</td>
+      <td>${esc(s.tipo)}${s.versionPropuesta?` <span class="sub mono">→ v${esc(ver(s.versionPropuesta))}</span>`:''}</td>
       <td>${etiEstado(s.etapa)}</td><td>${abierta?esc(aQuienLeToca(s)):'—'}</td><td class="sub">${fechaCorta(s.fecha.slice(0,10))}</td>
       <td class="mono">${abierta?diasEntre(ult.slice(0,10), S.hoy):''}</td></tr>`; }).join('') : '<tr><td colspan="7" class="vacio">No hay solicitudes en esta lista.<br><span class="sub">Las solicitudes nacen en «Lista maestra → + Solicitar nuevo documento».</span></td></tr>'}
   </tbody></table></div>`;
@@ -1512,7 +1521,7 @@ function abrirSolicitud(id){
 
   const previa = vistaPrevia(s.enlaceBorrador);
   modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(s.id)}</span> · ${esc(s.tipo)} · ${etiEstado(s.etapa)}</div>
-    <h2><span class="mono">${esc(s.codigo)}</span> — ${esc(s.titulo)}${s.versionPropuesta?` <span class="sub mono">v${esc(s.versionPropuesta)}</span>`:''}</h2></div><button class="cerrar" onclick="cerrarModal()">×</button></div>
+    <h2><span class="mono">${esc(s.codigo)}</span> — ${esc(s.titulo)}${s.versionPropuesta?` <span class="sub mono">v${esc(ver(s.versionPropuesta))}</span>`:''}</h2></div><button class="cerrar" onclick="cerrarModal()">×</button></div>
     <div class="ficha">
       <div class="visor"><div class="visor-banda" style="background:var(--azul)"><span>Borrador en flujo · no es copia controlada</span></div>
         <div class="visor-marco">${previa?`<iframe src="${esc(previa)}" loading="lazy"></iframe>`:'<div class="sin-archivo">'+(s.tipo==='Anulación'?'Solicitud de anulación: sin borrador.':'Sin enlace de borrador.')+'</div>'}</div></div>
@@ -1972,13 +1981,14 @@ const FICHAS = {
     titulo:'Documentos — correcciones',
     finalidad:'Sirve para corregir <b>datos administrativos</b> de un documento sin crear una versión nueva: el código oficial, un enlace roto, el cambio de responsable, una resolución mal escrita, un título mal tipeado. <br><b>No lo uses si cambia el contenido</b> del documento: para eso está «Solicitar modificación», que pasa por revisión y aprobación. El tipo, el proceso y la versión no se corrigen aquí, porque forman el código del documento. Cada corrección queda en la bitácora con el valor anterior y el nuevo.',
     mostrar:['Código','Título','Versión vigente','Estado','Responsable','Próxima revisión'],
-    soloVer:['Versión vigente','Estado'],
+    soloVer:['Estado'],
     nombreFila:'documento',
     campos:{
       'Código':{ tipo:'texto', req:true, nota:'<b>El código oficial del documento</b>, tal como figura en él: <span class="mono">FI-GCA-DG-001</span>, <span class="mono">FI-GCA-PL-001</span>. Si el documento ya tiene código propio, escríbelo aquí y reemplaza al que generó el sistema, para no tener dos códigos para lo mismo.<br><b>Al cambiarlo, el sistema arrastra el cambio</b> a sus versiones, solicitudes, observaciones y evidencias asociadas, para que el historial no quede huérfano. No puede repetir el de otro documento.' },
       'Título':{ tipo:'texto', req:true, nota:'<b>Corrige la redacción del título</b>: un error de tipeo, una mayúscula, el nombre oficial mal copiado en la carga inicial. <b>No crea versión nueva</b>, así que no lo uses si el documento cambió de contenido o de alcance: para eso está «Solicitar modificación», que deja constancia de quién revisó y aprobó el cambio. No puede repetir el título de otro documento vigente.' },
       'Programa':{ tipo:'catalogo', categoria:'programas', nota:'origen:Programa' },
       'Tipo':{ tipo:'catalogo', categoria:'tipos', nota:'Corrige el tipo si se eligió mal al cargar el documento. <b>No cambia el código por sí solo</b>: si el código lleva las letras del tipo anterior (el <span class="mono">PR</span> de <span class="mono">FI-GCA-PR-002</span>), corrígelo también arriba.' },
+      'Versión vigente':{ tipo:'texto', req:true, nota:'En número entero: <b>1, 2, 3</b>. Corrígela solo si se tipeó mal al cargar el documento. <b>No la uses para registrar una versión nueva</b>: si el documento cambió de contenido, cierra esto y usa el botón <b>Actualizar</b> de la ficha, que deja constancia de quién revisó y aprobó, y conserva la versión anterior en el historial.' },
       'Fecha de aprobación':{ tipo:'fecha', nota:'La fecha de la resolución o acta que aprobó la versión vigente. Si la cambias, revisa también la próxima revisión: no se recalcula sola.' },
       'Unidad responsable':{ tipo:'texto' },
       'Responsable':{ tipo:'texto' },
