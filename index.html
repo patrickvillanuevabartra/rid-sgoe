@@ -66,6 +66,7 @@ main{max-width:1240px;margin:0 auto;padding:20px}
 .aviso-reemplazo{background:#fff8e6;border:1px solid #e8d49a;border-radius:9px;padding:9px 12px;
   font-size:14px;line-height:1.55;color:#6b5516;margin-bottom:6px}
 .aviso-reemplazo a{color:#8a6a12;font-weight:600}
+.campo-falta{border-color:var(--falla)!important;background:#fdf2f2}
 .campo-varios{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
 .varios-filas{display:flex;flex-direction:column;gap:6px;width:100%}
 .varios-fila{display:flex;gap:7px;align-items:center}
@@ -1229,6 +1230,10 @@ const TIPOS_ARCHIVO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zi
    sigue aceptando un enlace de Drive pegado a mano. */
 const MAX_MB = 25;
 function campoArchivo(id, etiqueta, nota, o = {}){
+  // Cada vez que se dibuja el campo se parte de cero. Sin esto, los archivos
+  // del documento anterior seguían listados al abrir el formulario para otro,
+  // y podía quedar como principal el archivo equivocado.
+  ARCHIVOS[id] = []; ARCHIVOS_PREVIOS[id] = [];
   return campoF(etiqueta,
     `<div class="carga-archivo">
        <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none"
@@ -1390,9 +1395,26 @@ function formDocumento(modo, codigo){
   if (modo === 'existente') setTimeout(() => sembrarVarios('eReviso', '', 'Ej. Ing. Patricia Vega Denegri'), 0);
 }
 
+/* Avisa cuál falta, no una lista de cuatro donde tres están llenos. Deja el
+   cursor en el campo y lo marca, para no tener que buscarlo en el formulario. */
+function faltantes(pares){
+  const vacios = pares.filter(([id]) => { const el = $(id); return !el || !String(el.value||'').trim(); });
+  document.querySelectorAll('.campo-falta').forEach(e => e.classList.remove('campo-falta'));
+  if (!vacios.length) return null;
+  vacios.forEach(([id]) => { const el = $(id); if (el) el.classList.add('campo-falta'); });
+  const primero = $(vacios[0][0]);
+  if (primero){ primero.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>primero.focus(), 300); }
+  return vacios.length === 1
+    ? `Falta ${vacios[0][1]}.`
+    : `Faltan ${vacios.length} datos: ${vacios.map(x=>x[1]).join(', ')}.`;
+}
+
 async function enviarDocumento(modo, codigo){
   try{
     if (modo==='existente'){
+      const falta = faltantes([['dTitulo','el título del documento'], ['dTipo','el tipo de documento'],
+        ['eVersion','la versión'], ['eFecha','la fecha de aprobación']]);
+      if (falta){ aviso(falta, true); return; }
       const datos = Object.assign(leerCamposDocumento(), { codigo:$('eCodigo').value.trim(), version:$('eVersion').value.trim(),
         fechaAprobacion:$('eFecha').value, documentoAprobacion:$('eDocAprob').value.trim(), elaborado:$('eElaboro').value.trim(),
         revisado:leerVarios('eReviso'), aprobado:$('eAprobo').value.trim(), enlace:$('eEnlace').value.trim() });
