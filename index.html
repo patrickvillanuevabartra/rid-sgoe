@@ -63,6 +63,9 @@ main{max-width:1240px;margin:0 auto;padding:20px}
   color:#fff;background:var(--brand);border-radius:20px;padding:2px 9px;min-width:26px;text-align:center}
 .arch-fila a{color:var(--brand-oscuro)}
 .arch-fila a.quitar{color:var(--falla)}
+.aviso-reemplazo{background:#fff8e6;border:1px solid #e8d49a;border-radius:9px;padding:9px 12px;
+  font-size:14px;line-height:1.55;color:#6b5516;margin-bottom:6px}
+.aviso-reemplazo a{color:#8a6a12;font-weight:600}
 .campo-varios{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
 .varios-filas{display:flex;flex-direction:column;gap:6px;width:100%}
 .varios-fila{display:flex;gap:7px;align-items:center}
@@ -1236,6 +1239,15 @@ function campoArchivo(id, etiqueta, nota, o = {}){
        <input type="hidden" id="${id}" value="">
      </div>`, nota, o);
 }
+/* De qué documento es el archivo que se está subiendo. En los formularios de
+   solicitud lo da el título; en «Corregir datos», el campo Código, que es el
+   primero de la ficha de documentos. */
+function codigoEnContexto(){
+  if ($('dTitulo')) return $('dTitulo').value.trim();
+  if ($('adm_0')) return $('adm_0').value.trim();
+  return '';
+}
+
 function leerBase64(f){
   return new Promise((ok, mal) => { const l = new FileReader();
     l.onload = () => ok(String(l.result).split(',')[1]);
@@ -1244,13 +1256,29 @@ function leerBase64(f){
 }
 /* Lo cargado en cada campo: [{nombre, url, mb}]. El primero es el principal. */
 const ARCHIVOS = {};
+/* Con qué archivos venía el campo al abrirse. Sirve para avisar que el
+   anterior sigue en Drive cuando alguien lo reemplaza: el sistema nunca
+   sobrescribe, así que ese archivo queda suelto en la carpeta. */
+const ARCHIVOS_PREVIOS = {};
+function avisarReemplazo(id){
+  const antes = ARCHIVOS_PREVIOS[id] || [];
+  if (!antes.length) return '';
+  const ahora = (ARCHIVOS[id] || []).map(a => a.url);
+  const sueltos = antes.filter(u => !ahora.includes(u));
+  if (!sueltos.length) return '';
+  return `<div class="aviso-reemplazo"><b>Ojo:</b> el archivo que tenía antes este documento
+    <b>sigue guardado en Drive</b>, el sistema no lo borra. Si lo reemplazaste porque estaba
+    equivocado, entra a la carpeta del SGOE y bórralo para que nadie lo abra por error:
+    ${sueltos.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">archivo anterior${sueltos.length>1?' '+(i+1):''}</a>`).join(' · ')}.
+    Si en cambio es la versión anterior del documento, déjalo: es la evidencia de esa versión.</div>`;
+}
 function pintarArchivos(id){
   const lista = ARCHIVOS[id] || [];
   $(id).value = lista.map(a => a.url).join(SEP_ARCHIVOS);
   $(id+'_estado').textContent = lista.length
     ? `${lista.length} archivo${lista.length>1?'s':''} · el primero es el que se ve en el visor`
     : 'Ningún archivo cargado todavía';
-  $(id+'_lista').innerHTML = lista.map((a,i) => `<div class="arch-fila">
+  $(id+'_lista').innerHTML = avisarReemplazo(id) + lista.map((a,i) => `<div class="arch-fila">
       <span class="arch-pos">${i===0?'principal':i+1}</span>
       <b>${esc(a.nombre)}</b> <span class="sub">${a.mb} MB</span>
       <a href="${esc(a.url)}" target="_blank" rel="noopener">ver</a>
@@ -1271,7 +1299,7 @@ async function subirArchivos(id, origen){
     try{
       const base64 = await leerBase64(f);
       const r = await api('/archivo', { nombre:f.name, base64, origen:origen||'documento',
-        codigo:($('dTitulo')?$('dTitulo').value.trim():'') });
+        codigo:codigoEnContexto() });
       ARCHIVOS[id].push({ nombre:r.nombre, url:r.url, mb:r.mb });
       pintarArchivos(id);
       if (r.aviso) aviso(r.aviso, true);
@@ -1914,12 +1942,15 @@ const FICHAS = {
     titulo:'Documentos — correcciones',
     finalidad:'Sirve para corregir <b>datos administrativos</b> de un documento sin crear una versión nueva: el código oficial, un enlace roto, el cambio de responsable, una resolución mal escrita, un título mal tipeado. <br><b>No lo uses si cambia el contenido</b> del documento: para eso está «Solicitar modificación», que pasa por revisión y aprobación. El tipo, el proceso y la versión no se corrigen aquí, porque forman el código del documento. Cada corrección queda en la bitácora con el valor anterior y el nuevo.',
     mostrar:['Código','Título','Versión vigente','Estado','Responsable','Próxima revisión'],
-    soloVer:['Tipo','Versión vigente','Estado','Fecha de aprobación'],
+    soloVer:['Versión vigente','Estado'],
     nombreFila:'documento',
     campos:{
       'Código':{ tipo:'texto', req:true, nota:'<b>El código oficial del documento</b>, tal como figura en él: <span class="mono">FI-GCA-DG-001</span>, <span class="mono">FI-GCA-PL-001</span>. Si el documento ya tiene código propio, escríbelo aquí y reemplaza al que generó el sistema, para no tener dos códigos para lo mismo.<br><b>Al cambiarlo, el sistema arrastra el cambio</b> a sus versiones, solicitudes, observaciones y evidencias asociadas, para que el historial no quede huérfano. No puede repetir el de otro documento.' },
       'Título':{ tipo:'texto', req:true, nota:'<b>Corrige la redacción del título</b>: un error de tipeo, una mayúscula, el nombre oficial mal copiado en la carga inicial. <b>No crea versión nueva</b>, así que no lo uses si el documento cambió de contenido o de alcance: para eso está «Solicitar modificación», que deja constancia de quién revisó y aprobó el cambio. No puede repetir el título de otro documento vigente.' },
       'Programa':{ tipo:'catalogo', categoria:'programas', nota:'origen:Programa' },
+      'Tipo':{ tipo:'catalogo', categoria:'tipos', nota:'Corrige el tipo si se eligió mal al cargar el documento. <b>No cambia el código por sí solo</b>: si el código lleva las letras del tipo anterior (el <span class="mono">PR</span> de <span class="mono">FI-GCA-PR-002</span>), corrígelo también arriba.' },
+      'Fecha de aprobación':{ tipo:'fecha', nota:'La fecha de la resolución o acta que aprobó la versión vigente. Si la cambias, revisa también la próxima revisión: no se recalcula sola.' },
+      'Próxima revisión':{ tipo:'fecha', nota:'Cuándo toca revisar el documento. Normalmente la calcula el sistema con la fecha de aprobación y la frecuencia; aquí se ajusta si quedó mal.' },
       'Unidad responsable':{ tipo:'texto' },
       'Responsable':{ tipo:'texto' },
       'Correo responsable':{ tipo:'correo' },
@@ -2201,7 +2232,11 @@ function formAdmin(t, recordId){
     // Campo de archivo dentro de las correcciones: mismo botón que en los
     // formularios, para no tener que ir a buscar un enlace a mano.
     if (spec.tipo === 'archivo'){
-      setTimeout(() => { ARCHIVOS[id] = listaEnlaces(v).map(u => ({ nombre:u.replace(/^https?:\/\//i,'').slice(0,60), url:u, mb:'—' })); pintarArchivos(id); }, 0);
+      setTimeout(() => {
+        ARCHIVOS[id] = listaEnlaces(v).map(u => ({ nombre:u.replace(/^https?:\/\//i,'').slice(0,60), url:u, mb:'—' }));
+        ARCHIVOS_PREVIOS[id] = listaEnlaces(v);   // para avisar si se reemplazan
+        pintarArchivos(id);
+      }, 0);
       return `<div class="carga-archivo">
          <input type="file" id="${id}_file" accept="${TIPOS_ARCHIVO}" multiple style="display:none" onchange="subirArchivos('${id}','documento')">
          <button type="button" class="btn n" id="${id}_btn" onclick="document.getElementById('${id}_file').click()">Cargar archivos</button>
