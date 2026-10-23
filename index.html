@@ -396,7 +396,7 @@ body.con-modal .asis-boton{display:none}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-10-22a';
+const BACKEND_ESPERADO = '2026-10-23a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 /* Proceso deshabilitado hasta nuevo aviso. Poniendo esto en true vuelven a
    aparecer el campo del formulario, la columna de la lista maestra, sus dos
@@ -984,6 +984,25 @@ function notaActualizarVersion(d){
     ${S.perfil.control ? '<div class="sub" style="margin-top:8px"><b>No confundir con «Corregir datos»</b> (el otro botón del pie): eso arregla datos administrativos —un enlace roto, el cambio de responsable, un título mal tipeado— <b>sin crear versión nueva</b> y sin pasar por revisión. Si cambió el contenido del documento, va por el procedimiento de arriba.</div>' : ''}`);
 }
 
+/* Aviso de las versiones que le faltan al historial. Un documento registrado
+   directamente en v3 debería tener la v1 y la v2 detrás; si no están, el
+   historial miente por omisión y las Versiones obsoletas salen vacías. */
+function avisoVersionesFaltantes(d, versiones){
+  if (!S.perfil.puede.registrarExistente || d.estado !== 'Vigente') return '';
+  const vigente = parseInt(ver(d.version), 10) || 1;
+  if (vigente < 2) return '';
+  const hay = versiones.map(v => parseInt(ver(v.version), 10));
+  const faltan = [];
+  for (let i = 1; i < vigente; i++) if (!hay.includes(i)) faltan.push('v' + i);
+  if (!faltan.length) return '';
+  return `<div class="aviso-caja info" style="margin-bottom:12px">
+    <b>Al historial le ${faltan.length===1?'falta la':'faltan las'} ${faltan.join(', ')}.</b>
+    Este documento se registró directamente en la <b class="mono">v${vigente}</b>, así que ${faltan.length===1?'esa versión anterior':'esas versiones anteriores'} nunca ${faltan.length===1?'entró':'entraron'} al repositorio: ${faltan.length===1?'existió':'existieron'} en papel, antes del RID.
+    Si tienes ${faltan.length===1?'el archivo':'los archivos'}, ${faltan.length===1?'cárgalo':'cárgalos'} aquí para que el historial quede completo.
+    <span class="sub">Subirlos a la carpeta de Drive por tu cuenta no los registra: el aplicativo no revisa la carpeta.</span>
+    <div style="margin-top:9px"><button class="btn sm" onclick="formVersionHistorica('${esc(d.codigo)}')">Registrar una versión anterior</button></div></div>`;
+}
+
 function pintarFicha(pestana){
   const {documento:d, versiones, observaciones, solicitudes} = S.ficha;
   const p = S.perfil.puede, obsoleto = d.estado !== 'Vigente';
@@ -1014,7 +1033,8 @@ function pintarFicha(pestana){
       <dt>Medio</dt><dd>${esc(d.medio||'Digital')}</dd>
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
-  if (pestana==='versiones') cuerpo = (reg ? notaActualizarVersion(d) : '') + (versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
+  if (pestana==='versiones') cuerpo = (reg ? avisoVersionesFaltantes(d, versiones) + notaActualizarVersion(d) : '')
+    + (versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
     <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(ver(v.version))}</b> ${etiEstado(v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
     <div class="h-txt">${esc(v.descripcion)}</div>
     <div class="sub">Elaboró: ${esc(v.elaborado||'—')} · Revisó: ${esc(v.revisado||'—')} · Aprobó: ${esc(v.aprobado||'—')} · ${esc(v.documentoAprobacion||'')}${v.solicitud?` · <span class="mono">${esc(v.solicitud)}</span>`:''}
@@ -1111,6 +1131,56 @@ async function guardarAtencion(id, codigo){
   if (respuesta.length < 10) return aviso('Describe cómo se atendió (al menos una frase)', true);
   try{ await api('/observacion-atender', { id, respuesta }); aviso('Atención registrada'); await recargar(); abrirDocumento(codigo,'observaciones'); }
   catch(e){ aviso(e.message, true); }
+}
+
+/* -------------------------------------- carga de una versión anterior
+   Para los documentos que entraron con «Registrar documento ya aprobado»
+   directamente en su v2 o v3: sus versiones previas existieron en papel, antes
+   del RID, y no están en el repositorio. Esto las mete al historial como
+   obsoletas, sin tocar la versión vigente ni pasar por revisión. */
+function formVersionHistorica(codigo){
+  const d = (S.docs || []).find(x => x.codigo === codigo);
+  if (!d) return aviso('No se encontró el documento', true);
+  const vigente = parseInt(ver(d.version), 10) || 1;
+  const yaEstan = ((S.ficha && S.ficha.versiones) || []).map(v => parseInt(ver(v.version), 10));
+  const libres = [];
+  for (let i = vigente - 1; i >= 1; i--) if (!yaEstan.includes(i)) libres.push(i);
+  if (!libres.length) return aviso(`No falta ninguna versión anterior: el historial de ${codigo} ya llega hasta la v${vigente} vigente`, true);
+  const volver = `abrirDocumento('${esc(codigo)}','versiones')`;
+  modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(codigo)}</span> · vigente en <b class="mono">v${vigente}</b></div>
+    <h2>Registrar una versión anterior</h2></div><button class="cerrar" onclick="${volver}">×</button></div>
+  <div class="modal-cuerpo">
+    <div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">Este documento entró al repositorio directamente en su <b>v${vigente}</b>, así que sus versiones anteriores no están registradas: existieron en papel, antes del RID. Aquí las cargas al historial.
+      <br><br>La versión que registres queda como <b>obsoleta</b> desde el primer momento: es historia, no puede volver a ser la oficial. <b>No cambia nada del documento vigente</b> ni pasa por revisión y aprobación, igual que «Registrar documento ya aprobado». Aparecerá en <b>Lista maestra → Versiones obsoletas</b> y en la pestaña Versiones de esta ficha.</div></div>
+    <div class="campos">
+      ${campoF('Versión que estás registrando', `<select id="vhNum">${libres.map(i=>`<option value="${i}">v${i}</option>`).join('')}</select>`,
+        notaF(`Solo aparecen las versiones <b>anteriores a la v${vigente}</b> que todavía no están en el historial. Una versión posterior no se carga aquí: se crea con el botón <b>Actualizar</b>, que pasa por revisión y aprobación.`), {req:true})}
+      ${campoF('Fecha en que se aprobó esa versión', `<input type="date" id="vhFecha" max="${esc(S.hoy)}">`,
+        notaF('La fecha que figura en el documento mismo o en el acuerdo que lo aprobó. Es el dato que ordena el historial.'), {req:true})}
+      ${campoF('Documento que la aprobó', `<input type="text" id="vhDocAprob" placeholder="Ej. Acuerdo N°042-2024-CFI">`,
+        notaF('Número de la resolución, acuerdo, acta u oficio. Si no lo tienes a la mano, déjalo vacío y se puede completar después.'))}
+      ${campoF('Elaboró', `<input type="text" id="vhElaboro" placeholder="Nombre y cargo">`, notaF('Quién la elaboró en ese momento. Opcional.'))}
+      ${campoF('Revisó', `<input type="text" id="vhReviso" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
+      ${campoF('Aprobó', `<input type="text" id="vhAprobo" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
+      ${campoArchivo('vhArchivo', 'Archivo de esa versión', notaF('Sube el PDF o Word de <b>esa</b> versión, no el del documento vigente. Se guarda en la carpeta del SGOE en Drive. <b>Dejar el archivo en Drive por tu cuenta no lo registra:</b> el aplicativo no revisa la carpeta, solo conoce lo que se carga desde aquí.'), {origen:'version', completo:true})}
+      ${campoF('Qué cambió respecto de la anterior', `<textarea id="vhDesc" placeholder="Ej.: versión original aprobada en Consejo de Facultad, antes del repositorio"></textarea>`,
+        notaF('Lo que diferenciaba esta versión. Si no se sabe, basta con decir de dónde viene: queda como constancia de que esa versión existió y cuándo dejó de ser oficial.'), {completo:true})}
+    </div>
+  </div>
+  <div class="modal-pie"><button class="btn n" onclick="${volver}">Cancelar</button>
+    <button class="btn" onclick="guardarVersionHistorica('${esc(codigo)}')">Registrar en el historial</button></div>`, true);
+}
+async function guardarVersionHistorica(codigo){
+  const falta = faltantes([['vhNum','la versión'],['vhFecha','la fecha de aprobación']]);
+  if (falta) return aviso(falta, true);
+  try{
+    await api('/version-historica', { codigo, version:$('vhNum').value, fechaAprobacion:$('vhFecha').value,
+      documentoAprobacion:$('vhDocAprob').value.trim(), elaborado:$('vhElaboro').value.trim(),
+      revisado:$('vhReviso').value.trim(), aprobado:$('vhAprobo').value.trim(),
+      descripcionCambio:$('vhDesc').value.trim(), enlace:$('vhArchivo').value });
+    aviso(`v${$('vhNum').value} registrada en el historial como obsoleta`);
+    await recargar(); abrirDocumento(codigo, 'versiones');
+  }catch(e){ aviso(e.message, true); }
 }
 
 /* ---------------------------------------------- cascada de procesos
