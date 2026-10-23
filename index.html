@@ -297,6 +297,11 @@ dl.meta dd{margin:0;word-break:break-word}
 /* asistente */
 .asis-boton{position:fixed;right:18px;bottom:18px;z-index:70;border:0;border-radius:22px;background:var(--brand);color:#fff;padding:10px 18px;font-weight:600;font-size:14px;box-shadow:0 6px 18px rgba(15,143,94,.35)}
 .asis-boton:hover{background:var(--brand-oscuro)}
+/* El botón flotante está fijo abajo a la derecha, encima del velo del modal, y
+   tapaba el último botón del pie de la ficha: justo «Actualizar a vN». Mientras
+   haya un modal abierto se esconde; el panel se abriría encima del formulario
+   de todos modos, así que ahí no servía de nada. */
+body.con-modal .asis-boton{display:none}
 .asis-panel{position:fixed;right:18px;bottom:66px;z-index:75;width:390px;max-width:calc(100vw - 36px);height:min(560px, calc(100vh/1.22 - 100px));background:var(--papel);border:1px solid var(--linea);border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.2);display:flex;flex-direction:column;overflow:hidden}
 .asis-cab{display:flex;align-items:flex-start;gap:8px;padding:11px 14px;background:var(--brand);color:#fff}
 .asis-cab div{flex:1;line-height:1.25}
@@ -953,8 +958,31 @@ async function abrirDocumento(codigo, pestana){
     pintarFicha(pestana || 'ficha');
   }catch(e){ aviso(e.message, true); }
 }
-function cerrarModal(){ $('modales').innerHTML=''; }
-function modal(html, ancho){ $('modales').innerHTML = `<div class="velo" onclick="if(event.target===this)cerrarModal()"><div class="modal ${ancho?'ancho':''}">${html}</div></div>`; }
+function cerrarModal(){ $('modales').innerHTML=''; document.body.classList.remove('con-modal'); }
+function modal(html, ancho){ $('modales').innerHTML = `<div class="velo" onclick="if(event.target===this)cerrarModal()"><div class="modal ${ancho?'ancho':''}">${html}</div></div>`;
+  document.body.classList.add('con-modal'); }
+
+/* El procedimiento para subir de versión, explicado dentro de la propia ficha.
+   La duda que lo motivó: la gente apretaba «Actualizar a vN» esperando que el
+   número cambiara ahí mismo. No cambia: cambia cuando el aprobador aprueba, y
+   son tres personas distintas las que intervienen. */
+function notaActualizarVersion(d){
+  const actual = ver(d.version) || '1', prox = siguienteVersion(d.version);
+  if (d.estado !== 'Vigente') return `<div class="comose"><b>Este documento está dado de baja</b>
+    <div class="finalidad">Ya no es oficial y no admite versiones nuevas. Se conserva, con todas sus versiones, como referencia histórica.</div></div>`;
+  return desplegable(`¿Cómo pasa de v${actual} a v${prox}? El procedimiento, paso a paso`, `
+    <div class="aviso-caja info" style="margin:0 0 10px">El número de versión <b>no cambia cuando aprietas el botón</b>: cambia cuando el aprobador aprueba.
+      Hasta entonces <b class="mono">v${esc(actual)}</b> sigue siendo la versión oficial y es la que todos deben usar.</div>
+    ${comoSeUsa('Quién hace qué, y dónde', [
+      '<b>Tú (o el responsable del proceso):</b> en el pie de esta ficha, botón <b>Actualizar a v' + prox + '</b>. El sistema asigna el número; no se escribe ni se elige entre cambio mayor y menor.',
+      'En el formulario: <b>cargas el archivo actualizado</b>, escribes <b>qué cambia y por qué</b> (ese texto queda en este historial) y eliges <b>revisor</b> y <b>aprobador</b>. Son dos personas distintas, y ninguna puedes ser tú.',
+      'Al enviar, el documento <b>sigue en v' + esc(actual) + ' vigente</b> y aparece marcado «En actualización». Al revisor le llega un correo.',
+      '<b>El revisor:</b> pestaña <b>Flujo documental → Mis pendientes</b> → abre la solicitud → <b>Revisión conforme</b> (pasa al aprobador) u <b>Observar</b> (te la devuelve con su comentario para que la corrijas y uses <b>Reenviar a revisión</b>).',
+      '<b>El aprobador:</b> mismo lugar → abre la solicitud → anota la <b>resolución o acta</b> que respalda la aprobación → <b>Aprobar y publicar</b>.',
+      'Recién ahí el documento pasa a <b>v' + prox + '</b>, el archivo nuevo reemplaza al anterior, la <b>v' + esc(actual) + ' pasa a obsoleta</b> y aparece en <b>Lista maestra → Versiones obsoletas</b>. Todo queda en la bitácora.'
+    ])}
+    ${S.perfil.control ? '<div class="sub" style="margin-top:8px"><b>No confundir con «Corregir datos»</b> (el otro botón del pie): eso arregla datos administrativos —un enlace roto, el cambio de responsable, un título mal tipeado— <b>sin crear versión nueva</b> y sin pasar por revisión. Si cambió el contenido del documento, va por el procedimiento de arriba.</div>' : ''}`);
+}
 
 function pintarFicha(pestana){
   const {documento:d, versiones, observaciones, solicitudes} = S.ficha;
@@ -986,11 +1014,11 @@ function pintarFicha(pestana){
       <dt>Medio</dt><dd>${esc(d.medio||'Digital')}</dd>
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
-  if (pestana==='versiones') cuerpo = versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
+  if (pestana==='versiones') cuerpo = (reg ? notaActualizarVersion(d) : '') + (versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
     <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(ver(v.version))}</b> ${etiEstado(v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
     <div class="h-txt">${esc(v.descripcion)}</div>
     <div class="sub">Elaboró: ${esc(v.elaborado||'—')} · Revisó: ${esc(v.revisado||'—')} · Aprobó: ${esc(v.aprobado||'—')} · ${esc(v.documentoAprobacion||'')}${v.solicitud?` · <span class="mono">${esc(v.solicitud)}</span>`:''}
-    ${v.enlace?` · <a href="${esc(v.enlace)}" target="_blank" rel="noopener">archivo</a>`:''}</div></div>`).join('')}</div>` : '<div class="vacio">Sin historial de versiones.</div>';
+    ${v.enlace?` · <a href="${esc(v.enlace)}" target="_blank" rel="noopener">archivo</a>`:''}</div></div>`).join('')}</div>` : '<div class="vacio">Sin historial de versiones.</div>');
   if (pestana==='observaciones') cuerpo = `
     ${p.observar?`<div class="caja" style="margin-bottom:12px;padding:12px">
       <div class="campos"><div class="campo completo"><label>Tipo</label><select id="obsTipo">${opciones(TIPOS_OBS,'Observación')}</select>
