@@ -656,11 +656,16 @@ function vistaPrevia(url){
   return url;
 }
 
-/* Dos obsolescencias distintas, y confundirlas era el problema:
-   «Obsoleto» es el DOCUMENTO dado de baja (ya no es oficial) y «Obsoleta» es una
-   VERSIÓN reemplazada por otra posterior del mismo documento vigente. En la base
-   el valor sigue siendo «Obsoleto» para no romper lo ya guardado; aquí se rotula
-   «Dado de baja», que es lo que la gente entiende. */
+/* Dos cosas distintas que la tabla llama igual, y de ahí venía la confusión:
+     · ANULAR (= dar de baja) le pasa al DOCUMENTO: se retira entero y deja de
+       aplicar. La columna «Estado» de documentos guarda esto con el valor
+       «Obsoleto», que es un nombre desafortunado heredado de cómo se creó la
+       tabla, pero no significa «reemplazado»: significa «retirado».
+     · OBSOLETO (= reemplazado) le pasa a una VERSIÓN: salió una posterior y
+       aquella dejó de ser la oficial. El documento sigue vigente. Eso vive en la
+       columna «Estado versión» con el valor «Obsoleta».
+   Por eso el estado del documento se rotula «Dado de baja» en pantalla: para que
+   nadie lea «obsoleto» y entienda «reemplazado». El valor guardado no se toca. */
 const ROTULO_ESTADO = { 'Obsoleto':'Dado de baja' };
 function etiEstado(e){
   const c = {'Vigente':'e-vigente','Obsoleto':'e-obsoleto','Obsoleta':'e-obsoleto','En revisión':'e-flujo','En aprobación':'e-flujo','Observada':'e-observada','Rechazada':'e-rechazada','Aprobada':'e-vigente','Desistida':'e-neutra'}[e] || 'e-neutra';
@@ -870,7 +875,8 @@ function vMaestra(){
     ${p.solicitar?'<button class="btn" onclick="formDocumento(\'Creación\')">+ Solicitar nuevo documento</button>':''}
   </div>
   ${comoSeUsa('Cómo se usa esta pestaña', [
-    '<b>Tres carpetas:</b> <b>Vigentes</b> son los documentos oficiales de hoy; <b>Dados de baja</b>, los que se anularon y ya no aplican; <b>Versiones obsoletas</b>, las versiones reemplazadas de documentos que siguen vigentes (la v1 de un documento que hoy va en v2).',
+    '<b>Tres carpetas.</b> <b>Vigentes:</b> los documentos oficiales de hoy. <b>Dados de baja:</b> el documento entero se retiró y ya no aplica — «dado de baja» y «anulado» son lo mismo. <b>Versiones obsoletas:</b> versiones <b>reemplazadas</b> de documentos que siguen vigentes, como la v1 de un documento que hoy va en v2.',
+    '<b>Obsoleto no es lo mismo que anulado</b>, y conviene no mezclarlos: <b>obsoleto = reemplazado</b>, y le pasa a una versión, mientras el documento sigue vigente en su versión nueva. <b>Anulado (dado de baja) = retirado</b>, y le pasa al documento completo, que deja de aplicar.',
     '<b>Para leer un documento:</b> haz clic en su fila. Se abre la ficha con el archivo, sus versiones y sus observaciones.',
     S.perfil.puede.solicitar ? '<b>Para crear uno nuevo:</b> botón <b>+ Solicitar nuevo documento</b> (arriba a la derecha). El borrador se carga ahí mismo, desde tu computadora.' : '<b>Para proponer un documento nuevo:</b> pídelo al responsable de tu proceso o a control documental.',
     S.perfil.puede.solicitar ? '<b>Para cambiarlo o darlo de baja:</b> abre el documento y usa los botones <b>Solicitar modificación</b> o <b>Solicitar anulación</b> del pie de la ficha.' : '',
@@ -880,7 +886,9 @@ function vMaestra(){
     ${carpetas.map(([k,t])=>`<button class="${k===car?'activa':''}" onclick="irAMaestra('${k}')">${t}</button>`).join('')}
   </div>
   <div style="border:1px solid var(--linea);border-top:0;border-radius:0 0 10px 10px;padding:12px">
-  ${car==='baja'?'<div class="sub" style="margin-bottom:10px">Documentos <b>anulados</b>: dejaron de ser oficiales y se conservan solo como referencia histórica. No deben usarse para trabajar.</div>':''}
+  ${car==='baja'?`<div class="aviso-caja info" style="margin:0 0 10px"><b>Dado de baja = anulado.</b> Son la misma cosa con dos nombres: el documento <b>entero</b> se retiró y ya no aplica. Se conserva como referencia histórica, con todas sus versiones, pero no debe usarse para trabajar.
+    <br><br><b>Obsoleto es distinto.</b> Obsoleto quiere decir <b>reemplazado</b>, y le pasa a una <b>versión</b>, no al documento: cuando sale la v2, la v1 queda obsoleta y el documento sigue vigente. Esas están en la carpeta de al lado.
+    <br><span class="sub">En la base de datos el estado del documento se guarda con el valor <span class="mono">Obsoleto</span>, por cómo se creó la tabla. Ahí «obsoleto» significa «dado de baja»; es la única parte del sistema donde la palabra se usa con ese sentido.</span></div>`:''}
   ${car==='versiones'?'<div class="sub" style="margin-bottom:10px">Versiones <b>reemplazadas</b> por otra posterior del mismo documento. Se conservan como evidencia de qué estuvo vigente y cuándo. El documento puede seguir vigente en su versión actual.</div>':''}
   <div class="barra-filtros" style="margin-bottom:0">
     <input type="text" class="buscar" id="fQ" placeholder="${car==='versiones'?'Buscar por código, documento o descripción del cambio':'Buscar por código, título, palabra clave o responsable'}" value="${esc(F.q)}">
@@ -913,7 +921,8 @@ function pintarMaestra(){
       <td>${etiEstado(d.estado)}${d.solicitudEnCurso?'<div style="margin-top:3px"><span class="eti e-flujo">En actualización</span></div>':''}${S.obsAbiertas[d.codigo]?`<div class="sub" style="margin-top:3px">${S.obsAbiertas[d.codigo]} observ. abierta(s)</div>`:''}</td>
       ${REVISION_ACTIVA?`<td>${etiRevision(d)}</td>`:''}
       <td style="white-space:nowrap"><button class="btn g sm" onclick="event.stopPropagation();abrirDocumento('${esc(d.codigo)}')">Ver</button>
-        ${S.perfil.control?` <button class="btn n sm" title="Corregir datos administrativos, sin flujo de aprobación" onclick="event.stopPropagation();corregirDocumento('${esc(d.codigo)}')">Editar</button>`:''}</td>
+        ${S.perfil.control?` <button class="btn n sm" title="Corregir datos administrativos, sin flujo de aprobación" onclick="event.stopPropagation();corregirDocumento('${esc(d.codigo)}')">Editar</button>
+        <button class="btn n sm" style="color:var(--falla)" title="Solo para deshacer un error de carga. Si el documento dejó de aplicar, dale de baja." onclick="event.stopPropagation();formEliminarDocumento('${esc(d.codigo)}')">Eliminar</button>`:''}</td>
     </tr>`).join('') : `<tr><td colspan="8" class="vacio">${carpetaActual()==='baja'
       ? 'No hay documentos dados de baja.<br><span class="sub">Aquí aparecerán los documentos cuya anulación se apruebe desde la ficha, con «Solicitar anulación».</span>'
       : 'No hay documentos con esos filtros.<br><span class="sub">Limpia el buscador o cambia el tipo de documento.</span>'}</td></tr>`;
@@ -1074,7 +1083,7 @@ function pintarFicha(pestana){
       ${d.enlaceEditable && reg?`<a class="btn n" href="${esc(d.enlaceEditable)}" target="_blank" rel="noopener">Formato editable</a>`:''}
       <button class="btn n" onclick="pintarFicha('ficha');setTimeout(()=>window.print(),150)">Imprimir ficha</button>
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
-      ${puedeGestionar?`<button class="btn g" onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
+      ${puedeGestionar?`<button class="btn g" title="Anular = dar de baja: el documento entero se retira y deja de aplicar. No hace falta subir ninguna versión nueva. No confundir con una versión obsoleta, que es una versión reemplazada de un documento que sigue vigente." onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
       <button class="btn" onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
     </div>`, true);
 }
@@ -1102,6 +1111,52 @@ function corregirDocumento(codigo){
     filas:(S.docs||[]).map(filaDeDocumento),
     editable:{ campos:[], alta:false, permitido:S.perfil.control } };
   formAdmin('documentos', d.recordId);
+}
+
+/* ------------------------------------- eliminar un documento mal cargado
+   Deliberadamente incómodo: hay que escribir el código y decir por qué. Lo que
+   se borra no se recupera, y el camino normal para un documento que dejó de
+   aplicar es darlo de baja, que lo conserva con todas sus versiones. */
+function formEliminarDocumento(codigo){
+  const d = (S.docs || []).find(x => x.codigo === codigo);
+  if (!d) return aviso('No se encontró el documento', true);
+  const nVers = (S.versObs || []).filter(v => v.codigo === codigo).length;
+  modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(d.codigo)}</span> · v${esc(ver(d.version))} · ${esc(d.estado)}</div>
+    <h2>Eliminar «${esc(d.titulo)}»</h2></div><button class="cerrar" onclick="cerrarModal()">×</button></div>
+  <div class="modal-cuerpo">
+    <div class="aviso-caja" style="border-color:var(--falla)"><b>Esto no se puede deshacer.</b>
+      Se borra el documento de la lista maestra y su historial de versiones. No queda papelera: para recuperarlo habría que cargarlo de nuevo a mano.</div>
+    <div class="comose"><b>¿Es esto lo que necesitas?</b><div class="finalidad">
+      <b>Eliminar</b> es para la fila que <b>nunca debió existir</b>: un duplicado, un código equivocado, una prueba, un documento que cargaste dos veces.
+      <br><br><b>Si el documento sí estuvo vigente y dejó de aplicar</b>, no lo elimines: ábrelo y usa <b>Solicitar anulación</b>. Pasa a «dado de baja», deja de ser oficial pero se conserva con todas sus versiones. La norma pide poder demostrar qué estuvo vigente y cuándo; borrarlo destruye esa evidencia.</div></div>
+    <div class="aviso-caja info">Se eliminará:
+      <br>· el documento <b class="mono">${esc(d.codigo)}</b> — ${esc(d.titulo)}
+      <br>· ${nVers ? `su historial (<b>${nVers} versión(es) obsoleta(s)</b> además de la vigente)` : 'su fila de historial de versiones'}
+      ${d.enlace ? '<br><span class="sub">El archivo <b>no se borra de Drive</b>: el sistema nunca borra archivos. Si también quieres quitarlo, entra a la carpeta del SGOE y bórralo ahí.</span>' : ''}</div>
+    <div class="campos">
+      ${campoF('Por qué se elimina', `<textarea id="elMotivo" placeholder="Ej.: se cargó dos veces por error; el código correcto es FI-GCA-MT-004"></textarea>`,
+        notaF('Queda en la bitácora junto con todos los datos del documento, que es el único rastro que va a quedar de que existió. Una razón como «ya no sirve» no explica nada en una auditoría.'), {req:true, completo:true})}
+      ${campoF('Escribe el código para confirmar', `<input type="text" id="elCodigo" placeholder="${esc(d.codigo)}" autocomplete="off">`,
+        notaF(`Escribe <b class="mono">${esc(d.codigo)}</b> tal cual. Es para que no se elimine el documento equivocado por un clic de más.`), {req:true, completo:true})}
+    </div>
+  </div>
+  <div class="modal-pie"><button class="btn n" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn rojo" onclick="eliminarDocumento('${esc(codigo)}')">Eliminar definitivamente</button></div>`);
+}
+async function eliminarDocumento(codigo){
+  const falta = faltantes([['elMotivo','el motivo'],['elCodigo','el código de confirmación']]);
+  if (falta) return aviso(falta, true);
+  if ($('elCodigo').value.trim().toUpperCase() !== codigo.toUpperCase()){
+    $('elCodigo').classList.add('campo-falta'); $('elCodigo').focus();
+    return aviso(`El código no coincide. Escribe ${codigo} tal cual para confirmar.`, true);
+  }
+  try{
+    const r = await api('/documento-eliminar', { codigo, motivo:$('elMotivo').value.trim() });
+    cerrarModal();
+    aviso(`${codigo} eliminado${r.versiones?` junto con ${r.versiones} versión(es) del historial`:''}`);
+    if (r.archivo) aviso('Recuerda: el archivo sigue en la carpeta del SGOE en Drive. El sistema no lo borra.');
+    await recargar(); vMaestra();
+  }catch(e){ aviso(e.message, true); }
 }
 
 function puedeGestionarProc(d){ return S.perfil.puede.solicitar && (S.perfil.puede.todosLosProcesos || S.perfil.procesos.some(x=>x.toLowerCase()===d.proceso.toLowerCase())); }
@@ -1557,7 +1612,9 @@ function formDocumento(modo, codigo){
       ${selectorFlujo()}`;
   } else if (modo==='Anulación'){
     titulo = `Solicitar anulación · ${doc.codigo}`;
-    finalidad = `Con este formulario pides <b>dar de baja</b> «${esc(doc.titulo)}». Al aprobarse pasará a <b>obsoleto</b>: dejará de ser oficial, pero se conservará como referencia histórica con todas sus versiones.`;
+    finalidad = `Con este formulario pides <b>dar de baja</b> «${esc(doc.titulo)}». <b>Dar de baja y anular son lo mismo:</b> el documento <b>entero</b> se retira y deja de aplicar. Se conservará como referencia histórica con todas sus versiones.
+      <br><br><b>No tienes que subir ninguna versión nueva.</b> Dar de baja no reemplaza nada: retira. Solo hace falta explicar por qué.
+      <br><br><b>Esto no es «pasar a obsoleto».</b> Una versión queda obsoleta cuando otra posterior la reemplaza, y entonces el documento sigue vigente. Aquí el documento deja de existir como documento oficial.`;
     html = `<div class="campos">${campoF('Justificación', `<textarea id="fJust" placeholder="Por qué ya no se necesita"></textarea>`,
         notaF('Explica por qué ya no se necesita: lo reemplaza otro documento (indica cuál), cambió la norma, o el proceso dejó de existir.'), {req:true, completo:true})}</div>
       ${selectorFlujo()}`;
@@ -1997,7 +2054,7 @@ const DICC = {
     'Fuente / emisor':'Solo documentos externos: quién lo emite (SUNEDU, MINEDU, ISO…).',
     'Cargo del responsable':'Cargo de quien responde por el documento, no la persona.',
     'Versión vigente':'Número de la versión oficial actual. Sube en 1 (2.0) si cambia el contenido y en 0.1 (1.1) si solo cambia la forma.',
-    'Estado':'Vigente: es el documento oficial. Dado de baja (guardado como «Obsoleto»): se anuló y queda solo como referencia histórica. No confundir con una versión obsoleta, que es una versión reemplazada de un documento que sigue vigente.',
+    'Estado':'<b>Vigente:</b> es el documento oficial. <b>Dado de baja:</b> el documento entero se retiró y ya no aplica; queda solo como referencia histórica. «Dado de baja» y «anulado» son lo mismo. <br>No confundir con <b>obsoleto</b>, que significa <b>reemplazado</b> y le pasa a una <b>versión</b>, no al documento: cuando sale la v2, la v1 queda obsoleta y el documento sigue vigente. (En la base este estado se guarda con el valor «Obsoleto», por cómo se creó la tabla; ahí significa «dado de baja».)',
     'Fecha de aprobación':'Fecha en que se aprobó la versión vigente.',
     'Documento de aprobación':'Resolución, acta u oficio que respalda la aprobación de la versión vigente.',
     'Frecuencia de revisión (meses)':'Cada cuántos meses debe revisarse el documento aunque nadie pida cambios.',
@@ -2023,7 +2080,7 @@ const DICC = {
     'Fecha de aprobación':'Fecha de aprobación de esta versión.',
     'Documento de aprobación':'Resolución, acta u oficio de esta versión.',
     'Enlace documento':'Archivo de esta versión en particular.',
-    'Estado versión':'Vigente (la oficial) u Obsoleta (reemplazada por una posterior). Las obsoletas se listan en Lista maestra → Versiones obsoletas.',
+    'Estado versión':'<b>Vigente</b> (la oficial) u <b>Obsoleta</b> (reemplazada por una versión posterior del mismo documento, que sigue vigente). Las obsoletas se listan en Lista maestra → Versiones obsoletas. Obsoleta no quiere decir anulada: anular es retirar el documento completo.',
     'ID solicitud':'Solicitud que originó la versión. Vacío en la carga inicial.'
   },
   solicitudes: {
