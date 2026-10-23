@@ -990,6 +990,8 @@ function notaActualizarVersion(d){
       '<b>El aprobador:</b> mismo lugar → abre la solicitud → anota la <b>resolución o acta</b> que respalda la aprobación → <b>Aprobar y publicar</b>.',
       'Recién ahí el documento pasa a <b>v' + prox + '</b>, el archivo nuevo reemplaza al anterior, la <b>v' + esc(actual) + ' pasa a obsoleta</b> y aparece en <b>Lista maestra → Versiones obsoletas</b>. Todo queda en la bitácora.'
     ])}
+    ${S.perfil.puede.registrarExistente ? `<div class="aviso-caja info" style="margin:10px 0 0"><b>Atajo: ¿la versión nueva ya está aprobada?</b>
+      Si el acta o la resolución ya existe, no hace falta este recorrido: sería volver a aprobar lo ya aprobado. Usa <b>Subir v${prox} ya aprobada</b>, en el pie de esta ficha. Sube directo, la v${esc(actual)} pasa a obsoleta y queda registrado con qué acta se aprobó.</div>` : ''}
     ${S.perfil.control ? '<div class="sub" style="margin-top:8px"><b>No confundir con «Corregir datos»</b> (el otro botón del pie): eso arregla datos administrativos —un enlace roto, el cambio de responsable, un título mal tipeado— <b>sin crear versión nueva</b> y sin pasar por revisión. Si cambió el contenido del documento, va por el procedimiento de arriba.</div>' : ''}`);
 }
 
@@ -1084,7 +1086,8 @@ function pintarFicha(pestana){
       <button class="btn n" onclick="pintarFicha('ficha');setTimeout(()=>window.print(),150)">Imprimir ficha</button>
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
       ${puedeGestionar?`<button class="btn g" title="Anular = dar de baja: el documento entero se retira y deja de aplicar. No hace falta subir ninguna versión nueva. No confundir con una versión obsoleta, que es una versión reemplazada de un documento que sigue vigente." onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
-      <button class="btn" onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
+      <button class="btn" title="El documento todavía no está aprobado: pasa por revisión y aprobación." onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
+      ${S.perfil.puede.registrarExistente && d.estado==='Vigente' && !d.solicitudEnCurso?`<button class="btn g" title="La versión nueva ya fue aprobada fuera del aplicativo (acta o resolución): se sube directo, sin flujo, y la anterior pasa a obsoleta." onclick="formVersionAprobada('${esc(d.codigo)}')">Subir v${siguienteVersion(d.version)} ya aprobada</button>`:''}
     </div>`, true);
 }
 /* Corrección directa, sin flujo: enlaces, responsable, frecuencia de revisión…
@@ -1111,6 +1114,55 @@ function corregirDocumento(codigo){
     filas:(S.docs||[]).map(filaDeDocumento),
     editable:{ campos:[], alta:false, permitido:S.perfil.control } };
   formAdmin('documentos', d.recordId);
+}
+
+/* --------------------- subir una versión ya aprobada, sin flujo
+   Cuando la aprobación ya ocurrió fuera (un acta de Consejo, una resolución),
+   el flujo de tres personas no agrega control: agrega trámite. Esto la sube
+   directo y manda la anterior a obsoleta. Lo que sustituye al flujo es el acta,
+   que aquí es obligatoria. */
+function formVersionAprobada(codigo){
+  const d = (S.docs || []).find(x => x.codigo === codigo);
+  if (!d) return aviso('No se encontró el documento', true);
+  if (d.estado !== 'Vigente') return aviso('El documento está dado de baja: no admite versiones nuevas', true);
+  if (d.solicitudEnCurso) return aviso(`Tiene la solicitud ${d.solicitudEnCurso} en curso en el flujo. Resuélvela primero.`, true);
+  const actual = ver(d.version) || '1', prox = siguienteVersion(d.version);
+  const volver = `abrirDocumento('${esc(codigo)}','versiones')`;
+  modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(d.codigo)}</span> · ${esc(d.titulo)}</div>
+    <h2>Subir una versión ya aprobada</h2></div><button class="cerrar" onclick="${volver}">×</button></div>
+  <div class="modal-cuerpo">
+    <div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">Para cuando <b>la versión nueva ya está aprobada</b> fuera del repositorio —un acta de Consejo, una resolución— y solo hace falta subirla. <b>No pasa por revisión ni aprobación</b>: sería volver a aprobar lo ya aprobado.
+      <br><br>Al guardar, la <b>v${esc(actual)} pasa a obsoleta</b> y la nueva queda vigente de inmediato.
+      <br><br><b>Si el documento todavía no está aprobado</b>, no uses esto: cierra y usa <b>Actualizar a v${prox}</b>, que lo manda a revisión y aprobación.</div></div>
+    <div class="campos">
+      ${campoF('Versión', `<div class="salto-version"><span class="mono">v${esc(actual)}</span> <span class="flecha">→</span> <b class="mono">v${prox}</b></div>`,
+        notaF('El sistema asigna el número: sube un entero. La anterior queda en el historial como obsoleta.'), {completo:true})}
+      ${campoF('Fecha de aprobación', `<input type="date" id="vaFecha" max="${esc(S.hoy)}">`,
+        notaF('La fecha del acta o resolución que aprobó esta versión.'), {req:true})}
+      ${campoF('Acta, acuerdo o resolución', `<input type="text" id="vaDocAprob" placeholder="Ej. Acuerdo N°042-2024-CFI">`,
+        notaF('<b>Obligatorio.</b> Es la evidencia que reemplaza al flujo: sin esto no hay cómo demostrar en una auditoría que la versión fue aprobada.'), {req:true})}
+      ${campoArchivo('vaArchivo', 'Archivo de la versión aprobada', notaF('El PDF o Word de la versión nueva. Reemplaza al que se abre hoy desde la ficha. El archivo anterior <b>no se borra de Drive</b>: queda como evidencia de la v' + esc(actual) + '.'), {origen:'documento', completo:true})}
+      ${campoF('Elaboró', `<input type="text" id="vaElaboro" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
+      ${campoF('Revisó', `<input type="text" id="vaReviso" placeholder="Nombre y cargo">`, notaF('Quien la revisó fuera del aplicativo. Opcional.'))}
+      ${campoF('Aprobó', `<input type="text" id="vaAprobo" placeholder="Nombre y cargo">`, notaF('Quien la aprobó según el acta. Opcional pero recomendable.'), {completo:true})}
+      ${campoF('Qué cambió respecto de la v' + esc(actual), `<textarea id="vaDesc" placeholder="Qué secciones, pasos o responsables cambian"></textarea>`,
+        notaF('Queda en el historial de versiones del documento.'), {completo:true})}
+    </div>
+  </div>
+  <div class="modal-pie"><button class="btn n" onclick="${volver}">Cancelar</button>
+    <button class="btn" onclick="guardarVersionAprobada('${esc(codigo)}')">Subir como v${prox} vigente</button></div>`, true);
+}
+async function guardarVersionAprobada(codigo){
+  const falta = faltantes([['vaFecha','la fecha de aprobación'],['vaDocAprob','el acta o resolución']]);
+  if (falta) return aviso(falta, true);
+  try{
+    const r = await api('/version-aprobada', { codigo, fechaAprobacion:$('vaFecha').value,
+      documentoAprobacion:$('vaDocAprob').value.trim(), elaborado:$('vaElaboro').value.trim(),
+      revisado:$('vaReviso').value.trim(), aprobado:$('vaAprobo').value.trim(),
+      descripcionCambio:$('vaDesc').value.trim(), enlace:$('vaArchivo').value });
+    aviso(`${codigo} quedó vigente en v${r.version}. La v${r.anterior} pasó a obsoleta.`);
+    await recargar(); abrirDocumento(codigo, 'versiones');
+  }catch(e){ aviso(e.message, true); }
 }
 
 /* ------------------------------------- eliminar un documento mal cargado
@@ -1636,7 +1688,7 @@ function formDocumento(modo, codigo){
       </div><h3 class="sec-form">Ficha del documento</h3>${camposDocumento({})}`;
   }
   modal(`<div class="modal-cab"><h2 style="flex:1">${esc(titulo)}</h2><button class="cerrar" onclick="cerrarModal()">×</button></div>
-    <div class="modal-cuerpo">${modo!=='existente'?tiraFlujo(0):''}<div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">${finalidad}</div></div>${html}</div>
+    <div class="modal-cuerpo"><div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">${finalidad}</div></div>${html}</div>
     <div class="modal-pie"><button class="btn n" onclick="${codigo?`abrirDocumento('${esc(codigo)}')`:'cerrarModal()'}">Cancelar</button>
     <button class="btn" onclick="enviarDocumento('${modo}','${esc(codigo||'')}')">${modo==='existente'?'Registrar como vigente':'Iniciar flujo de aprobación'}</button></div>`);
   // El campo de revisores arranca con una línea vacía (o con las que ya había).
