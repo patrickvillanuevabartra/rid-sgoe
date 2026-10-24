@@ -147,7 +147,7 @@ tbody tr.clic:hover{background:#f8fbf9}
 .campo label{display:block;font-size:13px;font-weight:600;color:var(--tinta);margin-bottom:4px}
 .campo input,.campo select{width:100%}
 .campo .ayuda{font-size:11.5px;color:var(--tinta-tenue);margin-top:2px}
-.req::after{content:' *';color:var(--falla)}
+.req::before{content:'* ';color:var(--falla)}
 @media(max-width:700px){.campos{grid-template-columns:1fr}}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips label{display:inline-flex;gap:5px;align-items:center;border:1px solid var(--linea);border-radius:14px;padding:3px 10px;font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--tinta);cursor:pointer}
@@ -242,7 +242,19 @@ dl.meta dd{margin:0;word-break:break-word}
 .candado{font-size:10px;opacity:.7}
 .finalidad{font-size:12.5px;color:var(--tinta-media);line-height:1.5}
 .finalidad b{color:var(--tinta)}
-.nota-campo{font-size:11.5px;color:var(--tinta-media);margin-top:4px;line-height:1.45;padding-left:9px;border-left:2px solid var(--linea)}
+/* Las notas de ayuda de cada campo salían todas a la vez y el formulario se
+   volvía un muro de texto: con diez campos nadie lee ninguna. Ahora están
+   guardadas y aparecen al posar el mouse sobre el TÍTULO del campo. El título
+   lleva una bolita «?» para que se note que hay ayuda, y al hacerle clic la nota
+   se queda fija: sin eso, en tablet o celular —donde no hay mouse— la ayuda
+   sería inalcanzable. El asterisco de obligatorio se movió a ::before para
+   dejar libre el ::after de la bolita. */
+.campo > .nota-campo{display:none}
+.campo > label:hover ~ .nota-campo,.campo.nota-abierta > .nota-campo{display:block}
+.campo:has(> .nota-campo) > label{cursor:help;width:fit-content;max-width:100%}
+.campo:has(> .nota-campo) > label::after{content:'?';display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--linea);color:var(--tinta-media);font:600 11px/1 'IBM Plex Sans',sans-serif;margin-left:6px;vertical-align:middle}
+.campo:has(> .nota-campo) > label:hover::after,.campo.nota-abierta > label::after{background:var(--brand);color:#fff}
+.nota-campo{font-size:12.5px;color:var(--tinta-media);margin-top:4px;line-height:1.5;padding-left:9px;border-left:2px solid var(--brand)}
 .nota-campo.origen{border-left-color:var(--azul);background:var(--azul-suave);padding:6px 9px;border-radius:0 5px 5px 0}
 .nota-campo b{color:var(--tinta)}
 .convencion{margin-top:6px;padding:7px 9px;background:var(--fondo);border-radius:5px}
@@ -762,6 +774,16 @@ async function recargar(){
   $('cPend').textContent = pend; $('cPend').classList.toggle('oculto', !pend);
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) mostrar(b.dataset.vista); });
+
+/* Un clic en el título de un campo deja su nota fija. Con mouse basta pasar por
+   encima, pero en tablet o celular no hay «pasar por encima»: sin esto la ayuda
+   no se podría leer. Los títulos no tienen «for», así que el clic no hace nada más. */
+document.addEventListener('click', e => {
+  const l = e.target.closest('.campo > label');
+  if (!l) return;
+  const campo = l.parentElement;
+  if (campo.querySelector(':scope > .nota-campo')) campo.classList.toggle('nota-abierta');
+});
 function mostrar(v){
   S.vista = v;
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('activa', b.dataset.vista===v));
@@ -1087,7 +1109,8 @@ function pintarFicha(pestana){
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
       ${puedeGestionar?`<button class="btn g" title="Anular = dar de baja: el documento entero se retira y deja de aplicar. No hace falta subir ninguna versión nueva. No confundir con una versión obsoleta, que es una versión reemplazada de un documento que sigue vigente." onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
       <button class="btn" title="El documento todavía no está aprobado: pasa por revisión y aprobación." onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
-      ${S.perfil.puede.registrarExistente && d.estado==='Vigente' && !d.solicitudEnCurso?`<button class="btn g" title="La versión nueva ya fue aprobada fuera del aplicativo (acta o resolución): se sube directo, sin flujo, y la anterior pasa a obsoleta." onclick="formVersionAprobada('${esc(d.codigo)}')">Subir v${siguienteVersion(d.version)} ya aprobada</button>`:''}
+      ${S.perfil.puede.registrarExistente && d.estado==='Vigente' && !d.solicitudEnCurso?`<button class="btn g" title="La versión nueva ya fue aprobada fuera del aplicativo (acta o resolución): se sube directo, sin flujo, y la anterior pasa a obsoleta." onclick="formVersionAprobada('${esc(d.codigo)}')">Subir v${siguienteVersion(d.version)} ya aprobada</button>
+      <button class="btn g" title="La baja ya fue decidida fuera del aplicativo (acuerdo o resolución): se aplica directo, sin flujo." onclick="formBajaDirecta('${esc(d.codigo)}')">Dar de baja sin flujo</button>`:''}
     </div>`, true);
 }
 /* Corrección directa, sin flujo: enlaces, responsable, frecuencia de revisión…
@@ -1162,6 +1185,44 @@ async function guardarVersionAprobada(codigo){
       descripcionCambio:$('vaDesc').value.trim(), enlace:$('vaArchivo').value });
     aviso(`${codigo} quedó vigente en v${r.version}. La v${r.anterior} pasó a obsoleta.`);
     await recargar(); abrirDocumento(codigo, 'versiones');
+  }catch(e){ aviso(e.message, true); }
+}
+
+/* ----------------------------- dar de baja sin flujo de aprobación
+   Para cuando el acuerdo que retira el documento ya existe. Mismo criterio que
+   «subir una versión ya aprobada»: lo que reemplaza al flujo es el acta. */
+function formBajaDirecta(codigo){
+  const d = (S.docs || []).find(x => x.codigo === codigo);
+  if (!d) return aviso('No se encontró el documento', true);
+  if (d.estado !== 'Vigente') return aviso('El documento ya está dado de baja', true);
+  if (d.solicitudEnCurso) return aviso(`Tiene la solicitud ${d.solicitudEnCurso} en curso en el flujo. Resuélvela primero.`, true);
+  const volver = `abrirDocumento('${esc(codigo)}')`;
+  modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(d.codigo)}</span> · v${esc(ver(d.version))}</div>
+    <h2>Dar de baja «${esc(d.titulo)}»</h2></div><button class="cerrar" onclick="${volver}">×</button></div>
+  <div class="modal-cuerpo">
+    <div class="comose"><b>Para qué sirve este formulario</b><div class="finalidad">Para retirar un documento cuando <b>la decisión ya se tomó</b> fuera del repositorio: un acuerdo de Consejo, una norma que lo deroga, un procedimiento que dejó de existir. <b>No pasa por revisión ni aprobación</b>, porque sería volver a aprobar lo ya decidido.
+      <br><br>El documento <b>deja de ser oficial</b> y se conserva como referencia histórica con todas sus versiones. No se borra.
+      <br><br><b>Si la baja todavía no está decidida</b>, cierra y usa <b>Solicitar anulación</b>: ahí la propones y la aprueban otros dos.</div></div>
+    <div class="campos">
+      ${campoF('Fecha de la baja', `<input type="date" id="bdFecha" max="${esc(S.hoy)}" value="${esc(S.hoy)}">`,
+        notaF('Desde cuándo deja de aplicar. Normalmente la fecha del acuerdo que lo retira.'), {req:true})}
+      ${campoF('Acuerdo, acta o resolución', `<input type="text" id="bdDoc" placeholder="Ej. Acuerdo N°051-2026-CFI">`,
+        notaF('<b>Obligatorio.</b> Es la evidencia que reemplaza al flujo: sin esto no hay cómo demostrar en una auditoría quién decidió retirarlo.'), {req:true})}
+      ${campoF('Por qué se retira', `<textarea id="bdMotivo" placeholder="Ej.: lo reemplaza el FI-GCA-MT-006; el proceso dejó de existir; cambió la norma"></textarea>`,
+        notaF('Si lo reemplaza otro documento, indica cuál con su código. Queda en la bitácora.'), {req:true, completo:true})}
+    </div>
+  </div>
+  <div class="modal-pie"><button class="btn n" onclick="${volver}">Cancelar</button>
+    <button class="btn rojo" onclick="guardarBajaDirecta('${esc(codigo)}')">Dar de baja</button></div>`);
+}
+async function guardarBajaDirecta(codigo){
+  const falta = faltantes([['bdFecha','la fecha'],['bdDoc','el acuerdo o resolución'],['bdMotivo','el motivo']]);
+  if (falta) return aviso(falta, true);
+  try{
+    await api('/baja-directa', { codigo, fechaBaja:$('bdFecha').value,
+      documentoBaja:$('bdDoc').value.trim(), motivo:$('bdMotivo').value.trim() });
+    aviso(`${codigo} quedó dado de baja`);
+    await recargar(); abrirDocumento(codigo);
   }catch(e){ aviso(e.message, true); }
 }
 
