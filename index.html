@@ -432,7 +432,7 @@ const DISPOSICION = ['Evaluar al vencer','Eliminar','Transferir a archivo centra
 let S = { cred:'', perfil:null, cat:null, cand:null, docs:[], sols:[], obsAbiertas:{}, totalReg:0, hoy:'', prefijo:'FI', registros:null, vista:'tablero' };
 /* «carpeta» es la subpestaña de la Lista maestra: vigentes y baja listan
    documentos; versiones lista las versiones reemplazadas, que son otra cosa. */
-const F = { q:'', tipo:'', macro:'', proceso:'', programa:'', carpeta:'vigentes' };
+const F = { q:'', tipo:'', origen:'', macro:'', proceso:'', programa:'', carpeta:'vigentes' };
 const FR = { q:'', categoria:'', formato:'', programa:'', periodo:'', desde:'', hasta:'', quien:'', retencion:'', agrupar:'', orden:'' };
 
 /* ------------------------------------------------------------ utilidades */
@@ -907,10 +907,18 @@ function carpetaActual(){
   return (c !== 'vigentes' && !S.perfil.registrado) ? 'vigentes' : c;
 }
 function irAMaestra(carpeta){ F.carpeta = carpeta; mostrar('maestra'); }
+/* Origen del documento. Interno: lo elaboró la Facultad. Externo: lo emite otra
+   entidad (ley, reglamento de la universidad, norma ISO) y el SGOE controla qué
+   versión se usa. Si el dato está vacío se toma como interno, que es el valor
+   por defecto del formulario. */
+const origenDe = d => (String(d.origen||'').trim().toLowerCase() === 'externo') ? 'Externo' : 'Interno';
+const etiOrigen = d => origenDe(d) === 'Externo'
+  ? '<span class="eti" style="background:#fdeccf;color:#8a4b00;border:1px solid #f0c27a" title="Lo emite otra entidad (ley, reglamento, norma). El SGOE controla qué versión se usa.">Externo</span>'
+  : '<span class="eti" style="background:#e3eefb;color:#1d4f91;border:1px solid #a9c6ec" title="Lo elaboró la Facultad de Ingeniería.">Interno</span>';
 function docsFiltrados(){
   const q = F.q.toLowerCase();
   const estado = CARPETAS[carpetaActual()] || '';
-  return S.docs.filter(d => (!F.tipo||d.tipo===F.tipo) && (!F.macro||segsDe(d.proceso)[0]===F.macro) && (!F.proceso||d.macroproceso===F.proceso)
+  return S.docs.filter(d => (!F.tipo||d.tipo===F.tipo) && (!F.origen||origenDe(d)===F.origen) && (!F.macro||segsDe(d.proceso)[0]===F.macro) && (!F.proceso||d.macroproceso===F.proceso)
     && (!F.programa||d.programa===F.programa) && (!estado||d.estado===estado)
     && (!q || [d.codigo,d.titulo,d.palabras,d.responsable,d.unidad].join(' ').toLowerCase().includes(q)))
     .sort((a,b)=>a.codigo.localeCompare(b.codigo));
@@ -953,18 +961,21 @@ function vMaestra(){
   <div class="barra-filtros" style="margin-bottom:0">
     <input type="text" class="buscar" id="fQ" placeholder="${car==='versiones'?'Buscar por código, documento o descripción del cambio':'Buscar por código, título, palabra clave o responsable'}" value="${esc(F.q)}">
     <select id="fTipo">${opciones(S.cat.tipos.map(t=>t.nombre),F.tipo,'Todos los tipos')}</select>
+    ${car!=='versiones'?(() => { const base = S.docs.filter(d => !CARPETAS[car] || d.estado === CARPETAS[car]);
+      const nI = base.filter(d => origenDe(d) === 'Interno').length, nE = base.length - nI;
+      return `<select id="fOrigen" title="Interno: lo elaboró la Facultad. Externo: lo emite otra entidad (ley, reglamento, norma ISO).">${opciones([{v:'Interno',t:`Solo internos (${nI})`},{v:'Externo',t:`Solo externos (${nE})`}],F.origen,'Internos y externos')}</select>`; })():''}
     ${PROCESO_ACTIVO&&car!=='versiones'?`<select id="fMacro" title="Tipo de proceso">${opciones(tiposProc,F.macro,'Todos los tipos de proceso')}</select>
     <select id="fProceso" title="Proceso nivel 0">${opciones(S.cat.procesos.filter(x=>!F.macro||x.tipo===F.macro).map(x=>x.etiqueta),F.proceso,'Todos los procesos nivel 0')}</select>`:''}
     ${PROGRAMA_ACTIVO&&car!=='versiones'?`<select id="fPrograma">${opciones(S.cat.programas.map(x=>x.nombre),F.programa,'Todos los programas')}</select>`:''}
   </div>
   <div class="tabla-envoltura">${car==='versiones'
     ? '<table><thead><tr><th>Código de versión</th><th>Documento</th><th>Versión</th><th>Reemplazada por</th><th>Aprobada el</th><th>Qué cambió</th><th></th></tr></thead><tbody id="tbMaestra"></tbody></table>'
-    : `<table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th>${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th>${REVISION_ACTIVA?'<th>Próx. revisión</th>':''}<th></th></tr></thead><tbody id="tbMaestra"></tbody></table>`}</div>
+    : `<table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th><th>Origen${tip('Interno: lo elaboró la Facultad de Ingeniería. Externo: lo emite otra entidad (ley universitaria, reglamento de la universidad, norma ISO) y el SGOE solo controla qué versión se usa.', true)}</th>${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th>${REVISION_ACTIVA?'<th>Próx. revisión</th>':''}<th></th></tr></thead><tbody id="tbMaestra"></tbody></table>`}</div>
   <div class="sub" id="pieMaestra" style="margin-top:8px"></div>
   </div>`;
   const re = () => { pintarMaestra(); };
   $('fQ').oninput = e => { F.q=e.target.value; re(); };
-  [['fTipo','tipo'],['fProceso','proceso'],['fPrograma','programa']].forEach(([id,k]) => { const el=$(id); if (el) el.onchange = e => { F[k]=e.target.value; re(); }; });
+  [['fTipo','tipo'],['fOrigen','origen'],['fProceso','proceso'],['fPrograma','programa']].forEach(([id,k]) => { const el=$(id); if (el) el.onchange = e => { F[k]=e.target.value; re(); }; });
   if ($('fMacro')) $('fMacro').onchange = e => { F.macro=e.target.value; F.proceso=''; vMaestra(); };
   pintarMaestra();
 }
@@ -975,8 +986,9 @@ function pintarMaestra(){
     <tr class="clic" onclick="abrirDocumento('${esc(d.codigo)}')">
       <td class="cod">${esc(d.codigo)}</td>
       <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${PROGRAMA_ACTIVO&&d.programa?' · '+esc(d.programa):''}
-        ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}${d.origen==='Externo'?' <span class="eti e-neutra">Externo</span>':''}</div></td>
-      <td>${esc(d.tipo)}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
+        ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}</div></td>
+      <td>${esc(d.tipo)}</td>
+      <td>${etiOrigen(d)}${origenDe(d)==='Externo'&&d.fuente?`<div class="sub" style="margin-top:3px">${esc(d.fuente)}</div>`:''}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
       <td class="mono">v${esc(ver(d.version))}</td>
       <td>${etiEstado(d.estado)}${d.solicitudEnCurso?'<div style="margin-top:3px"><span class="eti e-flujo">En actualización</span></div>':''}${S.obsAbiertas[d.codigo]?`<div class="sub" style="margin-top:3px">${S.obsAbiertas[d.codigo]} observ. abierta(s)</div>`:''}</td>
       ${REVISION_ACTIVA?`<td>${etiRevision(d)}</td>`:''}
@@ -985,8 +997,9 @@ function pintarMaestra(){
         <button class="btn n sm" style="color:var(--falla)" title="Solo para deshacer un error de carga. Si el documento dejó de aplicar, dale de baja." onclick="event.stopPropagation();formEliminarDocumento('${esc(d.codigo)}')">Eliminar</button>`:''}</td>
     </tr>`).join('') : `<tr><td colspan="8" class="vacio">${carpetaActual()==='baja'
       ? 'No hay documentos dados de baja.<br><span class="sub">Aquí aparecerán los documentos cuya anulación se apruebe desde la ficha, con «Solicitar anulación».</span>'
-      : 'No hay documentos con esos filtros.<br><span class="sub">Limpia el buscador o cambia el tipo de documento.</span>'}</td></tr>`;
-  $('pieMaestra').textContent = `Mostrando ${lista.length} de ${S.docs.length} documentos · consultado el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}`;
+      : 'No hay documentos con esos filtros.<br><span class="sub">Limpia el buscador o cambia el tipo de documento o el origen.</span>'}</td></tr>`;
+  const nE = lista.filter(d => origenDe(d) === 'Externo').length;
+  $('pieMaestra').textContent = `Mostrando ${lista.length} de ${S.docs.length} documentos (${lista.length - nE} interno${lista.length - nE === 1 ? '' : 's'} · ${nE} externo${nE === 1 ? '' : 's'}) · consultado el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}`;
 }
 /* Una fila por versión reemplazada. El clic abre la ficha del documento en su
    pestaña Versiones, que es donde está el detalle completo del cambio. */
@@ -1013,7 +1026,7 @@ function exportarCSV(){
   const cols = esVers
     ? [['idVersion','ID versión'],['codigo','Código'],['titulo','Título'],['tipo','Tipo'],['version','Versión obsoleta'],['reemplazadaPor','Reemplazada por'],['fecha','Fecha de aprobación'],['tipoCambio','Tipo de cambio'],['descripcion','Descripción del cambio'],['aprobadoPor','Aprobado por'],['documentoAprobacion','Documento de aprobación'],['versionVigente','Versión vigente del documento'],['estadoDocumento','Estado del documento'],['enlace','Enlace']]
     : [['codigo','Código'],['titulo','Título'],['tipo','Tipo'],['macroproceso','Macroproceso'],['proceso','Proceso'],['programa','Programa'],['unidad','Unidad responsable'],['responsable','Responsable'],['version','Versión'],['estado','Estado'],['fechaAprobacion','Fecha de aprobación'],['documentoAprobacion','Documento de aprobación'],['proximaRevision','Próxima revisión'],['distribucion','Distribución'],['origen','Origen']];
-  const filas = [cols.map(c=>c[1])].concat((esVers?versObsFiltradas():docsFiltrados()).map(d=>cols.map(c=>d[c[0]]||'')));
+  const filas = [cols.map(c=>c[1])].concat((esVers?versObsFiltradas():docsFiltrados()).map(d=>cols.map(c=>(!esVers && c[0]==='origen') ? origenDe(d) : (d[c[0]]||''))));
   const csv = '\ufeff' + filas.map(f=>f.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download = `${esVers?'Versiones_obsoletas':'Lista_maestra'}_RID_SGOE_${S.hoy}.csv`; a.click();
