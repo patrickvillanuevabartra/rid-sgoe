@@ -1230,12 +1230,13 @@ function formVersionAprobada(codigo){
       ${campoF('Acta, acuerdo o resolución', `<input type="text" id="vaDocAprob" placeholder="Ej. Acuerdo N°042-2024-CFI">`,
         notaF('<b>Opcional por ahora.</b> Si la aprobación consta en un acta, acuerdo o resolución, escribe su número: es la evidencia que en una auditoría demuestra quién aprobó la versión. Si no la hay, déjalo en blanco.'))}
       ${campoArchivo('vaArchivo', 'Archivo de la versión aprobada', notaF('El PDF o Word de la versión nueva. Reemplaza al que se abre hoy desde la ficha. El archivo anterior <b>no se borra de Drive</b>: queda como evidencia de la v' + esc(actual) + '.'), {origen:'documento', completo:true})}
-      ${cajaGenerar('vaArchivo', d.codigo, prox, 'documento', 'vaFecha')}
+      ${(formatoDe(d.codigo)||{}).tipo === 'foda' ? '' : cajaGenerar('vaArchivo', d.codigo, prox, 'documento', 'vaFecha')}
       ${campoF('Elaboró', `<input type="text" id="vaElaboro" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
       ${campoF('Revisó', `<input type="text" id="vaReviso" placeholder="Nombre y cargo">`, notaF('Quien la revisó fuera del aplicativo. Opcional.'))}
       ${campoF('Aprobó', `<input type="text" id="vaAprobo" placeholder="Nombre y cargo">`, notaF('Quien la aprobó según el acta. Opcional pero recomendable.'), {completo:true})}
       ${campoF('Qué cambió respecto de la v' + esc(actual), `<textarea id="vaDesc" placeholder="Qué secciones, pasos o responsables cambian"></textarea>`,
         notaF('Queda en el historial de versiones del documento.'), {completo:true})}
+      ${(formatoDe(d.codigo)||{}).tipo === 'foda' ? cajaGenerar('vaArchivo', d.codigo, prox, 'documento', 'vaFecha') : ''}
     </div>
   </div>
   <div class="modal-pie"><button class="btn n" onclick="${volver}">Cancelar</button>
@@ -2170,6 +2171,17 @@ async function generarEnCampo(idCampo, codigo, version, origen, idFecha){
     if ($(idFecha)){ $(idFecha).classList.add('campo-falta'); $(idFecha).focus(); }
     return;
   }
+  // La Matriz FODA lleva en la carátula quién elaboró, revisó y aprobó: si
+  // falta alguno se avisa antes de generar, para no publicar una carátula vacía.
+  if ((formatoDe(codigo)||{}).tipo === 'foda' && idFecha){
+    const faltan = [['vaElaboro','Elaboró'],['vaReviso','Revisó'],['vaAprobo','Aprobó']].filter(([id]) => $(id) && !$(id).value.trim());
+    if (faltan.length){
+      faltan.forEach(([id]) => $(id).classList.add('campo-falta'));
+      $(faltan[0][0]).scrollIntoView({ block:'center', behavior:'smooth' }); setTimeout(() => $(faltan[0][0]).focus(), 300);
+      aviso(`Antes de generar, llena ${faltan.map(x => '«' + x[1] + '»').join(', ')}: van en la carátula, en el control de emisión.`, true);
+      return;
+    }
+  }
   const est = $(idCampo + '_estado');
   try{
     const g = await generarFormato(codigo, version, fecha);
@@ -2193,7 +2205,7 @@ function cajaGenerar(idCampo, codigo, version, origen, idFecha){
     No hay que descargar nada ni armar el documento a mano: el botón lee ${F.cuadrantes ? 'las tablas' : 'la tabla'}, arma el formato oficial${F.tipo === 'foda' ? ' en PDF' : ''} —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
     <ol style="margin:8px 0 0 18px;padding:0">
       <li>Antes, corrige lo que haga falta <b>en ${F.cuadrantes ? 'las tablas' : 'la tabla'} «${esc(F.tabla)}»</b>. Lo que está ahí es lo que saldrá en el formato.</li>
-      ${F.tipo === 'foda' ? '<li>Llena arriba <b>Elaboró, Revisó y Aprobó</b> y <b>qué cambió</b>: van en la carátula, en el control de emisión y en el control de cambios.</li>' : ''}
+      ${F.tipo === 'foda' ? '<li><b>Primero llena los campos de arriba</b>: fecha de aprobación, <b>Elaboró, Revisó y Aprobó</b> y <b>qué cambió</b>. Van en la carátula, en el control de emisión y en el control de cambios.</li>' : ''}
       ${idFecha?'<li>Escribe arriba la <b>fecha de aprobación</b>: va impresa en el encabezado.</li>':''}
       <li>Pulsa <b>«Generar el formato y cargarlo»</b>. En unos segundos el archivo aparece en la lista de archivos de este formulario.</li>
       <li>Si quieres verlo antes, usa <b>«Solo descargar para revisar»</b>: baja una copia a tu computadora, pero no la sube.</li>
