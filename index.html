@@ -1013,7 +1013,7 @@ function notaActualizarVersion(d){
       'Recién ahí el documento pasa a <b>v' + prox + '</b>, el archivo nuevo reemplaza al anterior, la <b>v' + esc(actual) + ' pasa a obsoleta</b> y aparece en <b>Lista maestra → Versiones obsoletas</b>. Todo queda en la bitácora.'
     ])}
     ${S.perfil.puede.registrarExistente ? `<div class="aviso-caja info" style="margin:10px 0 0"><b>Atajo: ¿la versión nueva ya está aprobada?</b>
-      Si el acta o la resolución ya existe, no hace falta este recorrido: sería volver a aprobar lo ya aprobado. Usa <b>Subir v${prox} ya aprobada</b>, en el pie de esta ficha. Sube directo, la v${esc(actual)} pasa a obsoleta y queda registrado con qué acta se aprobó.</div>` : ''}
+      Si la versión ya fue aprobada, no hace falta este recorrido: sería volver a aprobar lo ya aprobado. Usa <b>Subir v${prox} ya aprobada</b>, en el pie de esta ficha. Sube directo, la v${esc(actual)} pasa a obsoleta y, si existe un acta o resolución, queda registrado su número.</div>` : ''}
     ${S.perfil.control ? '<div class="sub" style="margin-top:8px"><b>No confundir con «Corregir datos»</b> (el otro botón del pie): eso arregla datos administrativos —un enlace roto, el cambio de responsable, un título mal tipeado— <b>sin crear versión nueva</b> y sin pasar por revisión. Si cambió el contenido del documento, va por el procedimiento de arriba.</div>' : ''}`);
 }
 
@@ -1143,8 +1143,8 @@ function corregirDocumento(codigo){
 /* --------------------- subir una versión ya aprobada, sin flujo
    Cuando la aprobación ya ocurrió fuera (un acta de Consejo, una resolución),
    el flujo de tres personas no agrega control: agrega trámite. Esto la sube
-   directo y manda la anterior a obsoleta. Lo que sustituye al flujo es el acta,
-   que aquí es obligatoria. */
+   directo y manda la anterior a obsoleta. Lo que sustituye al flujo es el acta;
+   por ahora es opcional, hasta que el sistema esté mejor estructurado. */
 function formVersionAprobada(codigo){
   const d = (S.docs || []).find(x => x.codigo === codigo);
   if (!d) return aviso('No se encontró el documento', true);
@@ -1164,7 +1164,7 @@ function formVersionAprobada(codigo){
       ${campoF('Fecha de aprobación', `<input type="date" id="vaFecha" max="${esc(S.hoy)}">`,
         notaF('La fecha del acta o resolución que aprobó esta versión.'), {req:true})}
       ${campoF('Acta, acuerdo o resolución', `<input type="text" id="vaDocAprob" placeholder="Ej. Acuerdo N°042-2024-CFI">`,
-        notaF('<b>Obligatorio.</b> Es la evidencia que reemplaza al flujo: sin esto no hay cómo demostrar en una auditoría que la versión fue aprobada.'), {req:true})}
+        notaF('<b>Opcional por ahora.</b> Si la aprobación consta en un acta, acuerdo o resolución, escribe su número: es la evidencia que en una auditoría demuestra quién aprobó la versión. Si no la hay, déjalo en blanco.'))}
       ${campoArchivo('vaArchivo', 'Archivo de la versión aprobada', notaF('El PDF o Word de la versión nueva. Reemplaza al que se abre hoy desde la ficha. El archivo anterior <b>no se borra de Drive</b>: queda como evidencia de la v' + esc(actual) + '.'), {origen:'documento', completo:true})}
       ${cajaGenerar('vaArchivo', d.codigo, prox, 'documento', 'vaFecha')}
       ${campoF('Elaboró', `<input type="text" id="vaElaboro" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
@@ -1178,7 +1178,8 @@ function formVersionAprobada(codigo){
     <button class="btn" onclick="guardarVersionAprobada('${esc(codigo)}')">Subir como v${prox} vigente</button></div>`, true);
 }
 async function guardarVersionAprobada(codigo){
-  const falta = faltantes([['vaFecha','la fecha de aprobación'],['vaDocAprob','el acta o resolución']]);
+  // El acta es opcional mientras el sistema se termina de estructurar.
+  const falta = faltantes([['vaFecha','la fecha de aprobación']]);
   if (falta) return aviso(falta, true);
   try{
     const r = await api('/version-aprobada', { codigo, fechaAprobacion:$('vaFecha').value,
