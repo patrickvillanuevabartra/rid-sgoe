@@ -1106,6 +1106,7 @@ function pintarFicha(pestana){
       ${listaEnlaces(d.enlace).map((u,i)=>`<a class="btn n" href="${esc(u)}" target="_blank" rel="noopener">${i?'Anexo '+i:'Abrir documento'}</a>`).join('')}
       ${d.enlaceEditable && reg?`<a class="btn n" href="${esc(d.enlaceEditable)}" target="_blank" rel="noopener">Formato editable</a>`:''}
       <button class="btn n" onclick="pintarFicha('ficha');setTimeout(()=>window.print(),150)">Imprimir ficha</button>
+      ${formatoDe(d.codigo) && reg && !obsoleto?`<button class="btn n" title="Arma el formato con lo que hoy tiene la tabla del sistema. Es una copia para revisar: no cambia la versión vigente." onclick="descargarFormato('${esc(d.codigo)}','${esc(ver(d.version)||'1')}',null)">Formato con datos actuales</button>`:''}
       ${S.perfil.control?`<button class="btn g" onclick="corregirDocumento('${esc(d.codigo)}')">Corregir datos</button>`:''}
       ${puedeGestionar?`<button class="btn g" title="Anular = dar de baja: el documento entero se retira y deja de aplicar. No hace falta subir ninguna versión nueva. No confundir con una versión obsoleta, que es una versión reemplazada de un documento que sigue vigente." onclick="formDocumento('Anulación','${esc(d.codigo)}')">Solicitar anulación</button>
       <button class="btn" title="El documento todavía no está aprobado: pasa por revisión y aprobación." onclick="formDocumento('Modificación','${esc(d.codigo)}')">Actualizar a v${siguienteVersion(d.version)}</button>`:''}
@@ -1165,6 +1166,7 @@ function formVersionAprobada(codigo){
       ${campoF('Acta, acuerdo o resolución', `<input type="text" id="vaDocAprob" placeholder="Ej. Acuerdo N°042-2024-CFI">`,
         notaF('<b>Obligatorio.</b> Es la evidencia que reemplaza al flujo: sin esto no hay cómo demostrar en una auditoría que la versión fue aprobada.'), {req:true})}
       ${campoArchivo('vaArchivo', 'Archivo de la versión aprobada', notaF('El PDF o Word de la versión nueva. Reemplaza al que se abre hoy desde la ficha. El archivo anterior <b>no se borra de Drive</b>: queda como evidencia de la v' + esc(actual) + '.'), {origen:'documento', completo:true})}
+      ${cajaGenerar('vaArchivo', d.codigo, prox, 'documento', 'vaFecha')}
       ${campoF('Elaboró', `<input type="text" id="vaElaboro" placeholder="Nombre y cargo">`, notaF('Opcional.'))}
       ${campoF('Revisó', `<input type="text" id="vaReviso" placeholder="Nombre y cargo">`, notaF('Quien la revisó fuera del aplicativo. Opcional.'))}
       ${campoF('Aprobó', `<input type="text" id="vaAprobo" placeholder="Nombre y cargo">`, notaF('Quien la aprobó según el acta. Opcional pero recomendable.'), {completo:true})}
@@ -1697,6 +1699,220 @@ function primerArchivo(id, i){
   const l = ARCHIVOS[id] || []; if (!l[i]) return;
   l.unshift(l.splice(i, 1)[0]); pintarArchivos(id);
 }
+/* ------------------------------------- formatos que se generan del sistema
+   Algunos documentos del SGOE son tablas que ya viven en QuintaDB (la Matriz
+   de Comunicaciones, por ejemplo). Para esos, el archivo oficial NO se arma a
+   mano en Excel: se genera aquí, desde la tabla, con el encabezado del formato
+   (logo, código, versión, fecha) y entra al repositorio por el mismo camino de
+   siempre: «Actualizar a vN» o «Subir vN ya aprobada». Así la tabla y el
+   documento publicado no vuelven a separarse.
+   Para sumar otro documento basta agregar su código aquí. */
+const FORMATOS = {
+  'FI-GCA-MT-007': {
+    tabla: 'Matriz de comunicaciones',
+    entidad: 'ddLd8rrwXdGyhcVSoLW51U',
+    titulo: 'MATRIZ DE COMUNICACIONES DEL SGOE',
+    hoja: 'Matriz de comunicaciones',
+    orden: 'N°',
+    // [campo en QuintaDB, título en el formato, columna inicial, columna final, alineación]
+    columnas: [
+      ['N°', 'N°', 1, 1, 'center'],
+      ['¿Qué se comunica?', '¿Qué se comunica?', 2, 7],
+      ['¿Por qué se comunica?', '¿Por qué se comunica?', 8, 14],
+      ['¿A quién se comunica?', '¿A quién se comunica?', 15, 20],
+      ['¿Cuándo se comunica?', '¿Cuándo se comunica?', 21, 26],
+      ['¿Cómo se comunica?', '¿Cómo se comunica?', 27, 31],
+      ['¿Quién comunica?', '¿Quién comunica?', 32, 36],
+      ['Registro o evidencia', 'Registro o evidencia', 37, 41]
+    ],
+    anchos: [3.86, 5.29],     // columnas A y B; las demás miden 13, como en la plantilla
+    totalColumnas: 41,
+    altoFila: 61.5
+  }
+};
+const formatoDe = codigo => FORMATOS[String(codigo||'').trim().toUpperCase()] || null;
+
+function cargarExcelJS(){
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    s.onload = ok;
+    s.onerror = () => mal(new Error('No se pudo cargar el generador de Excel. Revisa tu conexión y vuelve a intentar.'));
+    document.head.appendChild(s);
+  });
+}
+
+/* Lee la tabla por el mismo puente que usan la Matriz de Indicadores y la de
+   Riesgos. Es solo lectura: aquí no se escribe nada en QuintaDB. */
+async function leerTablaQuinta(entidad){
+  const payload = { path:`/apps/${CFG.APP_QUINTADB}/dtypes/entity/${entidad}.json`, method:'GET',
+    body:{ name_value:1, fetch_all:true, per_page:2000, _ts:Date.now() } };
+  let ultimo;
+  for (let i = 0; i < 3; i++){
+    try{
+      const ctrl = new AbortController(); const reloj = setTimeout(() => ctrl.abort(), 45000);
+      const r = await fetch(CFG.PROXY_QUINTADB, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify(payload), signal:ctrl.signal }).finally(() => clearTimeout(reloj));
+      if (!r.ok) throw new Error('El servidor de la base de datos no respondió (código ' + r.status + ').');
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      return d.records || [];
+    }catch(e){ ultimo = e; await pausa(1500 * (i + 1)); }
+  }
+  throw new Error('No se pudo leer la tabla del sistema: ' + (ultimo ? ultimo.message : 'sin respuesta') + '. Vuelve a intentar en unos segundos.');
+}
+
+/* Un valor de QuintaDB puede venir como texto, como lista o, en las casillas
+   de selección múltiple, unido con «slct». En el formato se escribe separado
+   por «; », como en la versión aprobada. */
+function textoCelda(v){
+  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean).join('; ');
+  return String(v == null ? '' : v).split('slct').map(x => x.trim()).filter(Boolean).join('; ');
+}
+
+const dosDigitos = v => String(parseInt(v, 10) || 1).padStart(2, '0');
+
+/* Arma el Excel del formato oficial. version: número entero; fecha: AAAA-MM-DD
+   o vacío si todavía no hay aprobación. Devuelve { blob, nombre, filas }. */
+async function generarFormato(codigo, version, fecha){
+  const F = formatoDe(codigo);
+  if (!F) throw new Error('Este documento no tiene una tabla del sistema asociada.');
+  const doc = (S.docs || []).find(d => d.codigo === codigo) || {};
+  cargando(true);
+  try{
+    await cargarExcelJS();
+    const registros = await leerTablaQuinta(F.entidad);
+    if (!registros.length) throw new Error(`La tabla «${F.tabla}» está vacía: no hay nada que poner en el formato.`);
+    const filas = registros.map(r => r.values || {})
+      .sort((a, b) => (parseFloat(a[F.orden]) || 0) - (parseFloat(b[F.orden]) || 0));
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'RID-SGOE'; wb.created = new Date();
+    const ws = wb.addWorksheet(F.hoja, { views:[{ showGridLines:false }] });
+    const ultimaCol = F.totalColumnas;
+    for (let c = 1; c <= ultimaCol; c++) ws.getColumn(c).width = F.anchos[c-1] || 13;
+
+    const negro = { argb:'FF000000' };
+    const fino = { style:'thin', color:negro };
+    const borde = { top:fino, left:fino, bottom:fino, right:fino };
+    const tnr = (sz, b) => ({ name:'Times New Roman', size:sz, bold:!!b, color:negro });
+    const caja = (r1, c1, r2, c2, valor, estilo) => {
+      if (r1 !== r2 || c1 !== c2) ws.mergeCells(r1, c1, r2, c2);
+      const celda = ws.getCell(r1, c1);
+      if (valor !== undefined) celda.value = valor;
+      Object.assign(celda, estilo || {});
+      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) ws.getCell(r, c).border = borde;
+      return celda;
+    };
+
+    // Encabezado: logo · Facultad y título · código, fecha, versión, página
+    [16.5, 15, 15, 15, 8.25].forEach((h, i) => ws.getRow(i + 1).height = h);
+    caja(1, 1, 4, 3);
+    try{
+      const logo = await (await fetch('img/logo-urp.jpg')).arrayBuffer();
+      const idImg = wb.addImage({ buffer:logo, extension:'jpeg' });
+      ws.addImage(idImg, { tl:{ col:0.35, row:0.05 }, ext:{ width:76, height:78 }, editAs:'oneCell' });
+    }catch(e){ /* sin logo el formato sigue siendo válido */ }
+    caja(1, 4, 1, 35, 'FACULTAD DE INGENIERÍA', { font:tnr(13, true), alignment:{ horizontal:'center', vertical:'middle' } });
+    caja(2, 4, 4, 35, (F.titulo || doc.titulo || '').toUpperCase(), { font:tnr(12, true), alignment:{ horizontal:'center', vertical:'middle', wrapText:true } });
+    const datos = [`Código: ${codigo}`, `Fecha de aprobación: ${fecha ? fechaCorta(fecha) : 'pendiente de aprobación'}`,
+      `Versión: ${dosDigitos(version)}`, 'Página: 1 de 1'];
+    datos.forEach((t, i) => caja(i + 1, 36, i + 1, ultimaCol, t, { font:tnr(10), alignment:{ horizontal:'left', vertical:'middle' } }));
+
+    // Fila de títulos
+    const gris = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFD9D9D9' } };
+    ws.getRow(6).height = 20.25;
+    F.columnas.forEach(([, titulo, c1, c2]) => caja(6, c1, 6, c2, titulo,
+      { font:tnr(11, true), fill:gris, alignment:{ horizontal:'center', vertical:'middle', wrapText:true } }));
+
+    // Filas de datos. El alto crece si el texto no entra en las 61.5 de la plantilla.
+    filas.forEach((v, i) => {
+      const r = 7 + i;
+      let lineas = 1;
+      F.columnas.forEach(([campo, , c1, c2, alinear]) => {
+        const t = textoCelda(v[campo]);
+        const ancho = Array.from({ length:c2 - c1 + 1 }, (_, k) => F.anchos[c1 - 1 + k] || 13).reduce((a, b) => a + b, 0);
+        lineas = Math.max(lineas, Math.ceil(t.length / Math.max(1, ancho * 1.05)));
+        const num = alinear === 'center' && /^\d+$/.test(t);
+        caja(r, c1, r, c2, num ? parseInt(t, 10) : t,
+          { font:tnr(11), alignment:{ horizontal:alinear || 'left', vertical:'middle', wrapText:true } });
+      });
+      ws.getRow(r).height = Math.max(F.altoFila, lineas * 15 + 8);
+    });
+
+    // Pie: de dónde salió el archivo, para la trazabilidad
+    const pie = 7 + filas.length + 1;
+    ws.mergeCells(pie, 1, pie, 20);
+    Object.assign(ws.getCell(pie, 1), { value:`Generado desde el aplicativo del SGOE (tabla «${F.tabla}») el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`,
+      font:tnr(9), alignment:{ horizontal:'left', vertical:'middle' } });
+    ws.getRow(pie).height = 18;
+
+    ws.pageSetup = { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:1,
+      horizontalCentered:true, margins:{ left:0.3, right:0.3, top:0.4, bottom:0.4, header:0.2, footer:0.2 },
+      printArea:`A1:${ws.getColumn(ultimaCol).letter}${pie}`, printTitlesRow:'6:6' };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const nombre = `${codigo}_${(doc.titulo || F.titulo).replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, '_').replace(/_+$/,'')}_v${dosDigitos(version)}.xlsx`;
+    return { blob, nombre, filas:filas.length };
+  } finally { cargando(false); }
+}
+
+function descargarBlob(blob, nombre){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* Solo descargar, para revisarlo antes de publicarlo. No sube nada. */
+async function descargarFormato(codigo, version, idFecha){
+  try{
+    const fecha = idFecha && $(idFecha) ? $(idFecha).value : '';
+    const g = await generarFormato(codigo, version, fecha);
+    descargarBlob(g.blob, g.nombre);
+    aviso(`Se descargó el formato con ${g.filas} filas. Es para revisar: todavía no está en el repositorio.`);
+  }catch(e){ aviso(e.message, true); }
+}
+
+/* Generar y dejarlo cargado en el campo de archivo del formulario, como si se
+   hubiera subido desde la computadora. El resto del formulario no cambia. */
+async function generarEnCampo(idCampo, codigo, version, origen, idFecha){
+  const fecha = idFecha && $(idFecha) ? $(idFecha).value : '';
+  if (idFecha && !fecha){
+    aviso('Primero escribe la fecha de aprobación: va impresa en el encabezado del formato.', true);
+    if ($(idFecha)){ $(idFecha).classList.add('campo-falta'); $(idFecha).focus(); }
+    return;
+  }
+  const est = $(idCampo + '_estado');
+  try{
+    const g = await generarFormato(codigo, version, fecha);
+    if (est) est.textContent = `Subiendo ${g.nombre}…`;
+    const base64 = await leerBase64(g.blob);
+    const r = await api('/archivo', { nombre:g.nombre, base64, origen:origen || 'documento', codigo });
+    ARCHIVOS[idCampo] = [{ nombre:r.nombre, url:r.url, mb:r.mb }].concat((ARCHIVOS[idCampo] || []).filter(a => a.url !== r.url));
+    pintarArchivos(idCampo);
+    if (r.aviso) aviso(r.aviso, true);
+    aviso(`Formato generado con ${g.filas} filas de la tabla y cargado como archivo principal.`);
+  }catch(e){ if (est) est.textContent = 'No se pudo generar el formato'; aviso(e.message, true); }
+}
+
+/* Recuadro que aparece en los formularios de versión de los documentos que
+   tienen tabla en el sistema. */
+function cajaGenerar(idCampo, codigo, version, origen, idFecha){
+  const F = formatoDe(codigo); if (!F) return '';
+  const fArg = idFecha ? `'${idFecha}'` : 'null';
+  return `<div class="completo aviso-caja info" style="margin:0">
+    <b>Este documento se genera desde el sistema.</b> Su contenido vive en la tabla <b>«${esc(F.tabla)}»</b>.
+    En vez de subir un Excel hecho a mano, el sistema arma el formato oficial —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— con lo que hoy tiene la tabla.
+    <div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn sm" onclick="generarEnCampo('${idCampo}','${esc(codigo)}','${esc(version)}','${origen}',${fArg})">Generar el formato y cargarlo</button>
+      <button type="button" class="btn g sm" onclick="descargarFormato('${esc(codigo)}','${esc(version)}',${fArg})">Solo descargar para revisar</button>
+    </div>
+    <div class="sub" style="margin-top:6px">Si algo está mal en el formato, la corrección se hace en la tabla del sistema, no en el Excel: así la próxima versión ya sale bien.</div></div>`;
+}
+
 const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
   notaF('Pulsa <b>Cargar archivos</b> y elige el borrador desde tu computadora. Se guarda en la carpeta del repositorio en Drive y el sistema lo comparte solo con <b>urp.edu.pe</b>: ya no tienes que compartirlo tú. Puedes elegir <b>varios archivos a la vez</b>; el primero es el que se abre en el visor y el orden se puede cambiar. Formatos: PDF, Word, Excel, PowerPoint, imagen o ZIP. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ''),
   {req:true, completo:true, origen:'borrador'});
@@ -1720,6 +1936,7 @@ function formDocumento(modo, codigo){
         notaF('El sistema asigna la versión: cada actualización aprobada sube un número entero. No hay que escribirla ni elegir entre cambio mayor y menor.'), {completo:true})}</div>
       <h3 class="sec-form">Ficha del documento</h3>${camposDocumento(doc)}
       <h3 class="sec-form">Borrador y justificación</h3><div class="campos">${campoBorrador('Archivo del borrador actualizado')}
+      ${cajaGenerar('fBorrador', doc.codigo, siguienteVersion(doc.version), 'borrador', null)}
       ${campoF('Descripción y justificación del cambio', `<textarea id="fJust" placeholder="Qué cambia y por qué"></textarea>`,
         notaF('Di <b>qué cambia</b> (secciones, pasos, responsables) y <b>por qué</b>. Este texto queda en el historial de versiones del documento.'), {req:true, completo:true})}</div>
       ${selectorFlujo()}`;
