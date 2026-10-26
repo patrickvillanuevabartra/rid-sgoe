@@ -1890,7 +1890,28 @@ function descargarBlob(blob, nombre){
    Límite conocido: QuintaDB no deja rastro de las filas BORRADAS, así que una
    fila eliminada sin otro cambio no dispara el aviso. */
 const CAMBIOS = {};   // por código: { cambio, ultimo, ref, cuando }
-const fechaLima = iso => { try{ return new Date(iso).toLocaleDateString('en-CA', { timeZone:'America/Lima' }); }catch(e){ return ''; } };
+/* QuintaDB, según por dónde se lea, entrega la fecha en formatos distintos
+   («2026-10-26T14:34:25Z», «2026-10-26 09:34:25 -0500», «26/10/2026 09:34»…).
+   Se acepta cualquiera y se devuelve AAAA-MM-DD en hora de Lima; si no se
+   reconoce, se devuelve vacío y NO se avisa (antes salía «Invalid Date»). */
+const esFecha = t => /^\d{4}-\d{2}-\d{2}$/.test(t);
+function fechaLima(v){
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;                       // fecha sola: tal cual, sin zona horaria
+  if (/^\d{10,13}$/.test(s)){ const n = Number(s); return fechaLima(new Date(s.length === 10 ? n * 1000 : n).toISOString()); }
+  let m = /^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/.exec(s);             // con barras: día/mes/año, como en Perú
+  if (m){ let [, a, b, y] = m; if (+b > 12){ [a, b] = [b, a]; }
+    return `${y}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`; }
+  let d = new Date(s);
+  if (isNaN(d)) d = new Date(s.replace(' ', 'T').replace(/\s*([+-]\d{2}):?(\d{2})$/, '$1:$2').replace(/\s*UTC$/i, 'Z'));
+  if (!isNaN(d)){
+    const t = d.toLocaleDateString('en-CA', { timeZone:'America/Lima' });
+    if (esFecha(t)) return t;
+  }
+  m = /(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
 async function comprobarTabla(codigo){
   const F = formatoDe(codigo), d = (S.docs || []).find(x => x.codigo === codigo);
   if (!F || !d || d.estado !== 'Vigente') return null;
@@ -1898,9 +1919,11 @@ async function comprobarTabla(codigo){
   if (previo && Date.now() - previo.cuando < 5 * 60000) return previo;   // no se relee en cada clic
   try{
     const registros = await leerTablaQuinta(F.entidad);
-    const ultimo = registros.map(r => fechaLima(r.updated_at || r.created_at || '')).filter(Boolean).sort().pop() || '';
-    const ref = [d.fechaAprobacion || '', String(d.actualizado || '').slice(0, 10)].sort().pop();
-    return (CAMBIOS[codigo] = { cambio: !!(ultimo && ref && ultimo > ref), ultimo, ref, cuando: Date.now() });
+    const fechaDe = r => fechaLima(r.updated_at || r.updatedAt || r.created_at || r.createdAt || '');
+    const ultimo = registros.map(fechaDe).filter(esFecha).sort().pop() || '';
+    const ref = [fechaLima(d.fechaAprobacion), fechaLima(d.actualizado)].filter(esFecha).sort().pop() || '';
+    if (!ultimo && registros.length) console.warn('RID: la tabla no trajo fechas reconocibles', registros[0]);
+    return (CAMBIOS[codigo] = { cambio: !!(esFecha(ultimo) && esFecha(ref) && ultimo > ref), ultimo, ref, cuando: Date.now() });
   }catch(e){ return null; }   // sin conexión a la tabla no se avisa nada: no es un error del usuario
 }
 function avisoCambioTabla(d){
