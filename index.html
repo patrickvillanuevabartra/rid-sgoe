@@ -408,7 +408,7 @@ body.con-modal .asis-boton{display:none}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-10-23a';
+const BACKEND_ESPERADO = '2026-10-26a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 /* Proceso deshabilitado hasta nuevo aviso. Poniendo esto en true vuelven a
    aparecer el campo del formulario, la columna de la lista maestra, sus dos
@@ -1226,7 +1226,7 @@ function formBajaDirecta(codigo){
       ${campoF('Fecha de la baja', `<input type="date" id="bdFecha" max="${esc(S.hoy)}" value="${esc(S.hoy)}">`,
         notaF('Desde cuándo deja de aplicar. Normalmente la fecha del acuerdo que lo retira.'), {req:true})}
       ${campoF('Acuerdo, acta o resolución', `<input type="text" id="bdDoc" placeholder="Ej. Acuerdo N°051-2026-CFI">`,
-        notaF('<b>Obligatorio.</b> Es la evidencia que reemplaza al flujo: sin esto no hay cómo demostrar en una auditoría quién decidió retirarlo.'), {req:true})}
+        notaF('<b>Opcional por ahora.</b> Si la baja consta en un acuerdo, acta o resolución, escribe su número: es la evidencia que en una auditoría demuestra quién decidió retirarlo. Si no lo hay, déjalo en blanco.'))}
       ${campoF('Por qué se retira', `<textarea id="bdMotivo" placeholder="Ej.: lo reemplaza el FI-GCA-MT-006; el proceso dejó de existir; cambió la norma"></textarea>`,
         notaF('Si lo reemplaza otro documento, indica cuál con su código. Queda en la bitácora.'), {req:true, completo:true})}
     </div>
@@ -1235,7 +1235,8 @@ function formBajaDirecta(codigo){
     <button class="btn rojo" onclick="guardarBajaDirecta('${esc(codigo)}')">Dar de baja</button></div>`);
 }
 async function guardarBajaDirecta(codigo){
-  const falta = faltantes([['bdFecha','la fecha'],['bdDoc','el acuerdo o resolución'],['bdMotivo','el motivo']]);
+  // El acuerdo es opcional mientras el sistema se termina de estructurar.
+  const falta = faltantes([['bdFecha','la fecha'],['bdMotivo','el motivo']]);
   if (falta) return aviso(falta, true);
   try{
     await api('/baja-directa', { codigo, fechaBaja:$('bdFecha').value,
