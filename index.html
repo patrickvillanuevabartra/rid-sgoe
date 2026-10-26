@@ -1001,7 +1001,11 @@ function notaActualizarVersion(d){
   const actual = ver(d.version) || '1', prox = siguienteVersion(d.version);
   if (d.estado !== 'Vigente') return `<div class="comose"><b>Este documento está dado de baja</b>
     <div class="finalidad">Ya no es oficial y no admite versiones nuevas. Se conserva, con todas sus versiones, como referencia histórica.</div></div>`;
+  const F = formatoDe(d.codigo);
   return desplegable(`¿Cómo pasa de v${actual} a v${prox}? El procedimiento, paso a paso`, `
+    ${F?`<div class="aviso-caja info" style="margin:0 0 10px"><b>Este documento se genera desde la tabla «${esc(F.tabla)}» de QuintaDB.</b>
+      Los cambios se hacen en la tabla, no en un Excel. Para la v${prox}: corrige la tabla → abre <b>Subir v${prox} ya aprobada</b> (o <b>Actualizar a v${prox}</b> si necesita revisión) → pulsa <b>«Generar el formato y cargarlo»</b> → guarda.
+      El sistema arma el Excel oficial con la versión y la fecha, y lo publica aquí. Para ver cómo quedaría sin publicar nada, usa <b>«Formato con datos actuales»</b> en el pie de esta ficha.</div>`:''}
     <div class="aviso-caja info" style="margin:0 0 10px">El número de versión <b>no cambia cuando aprietas el botón</b>: cambia cuando el aprobador aprueba.
       Hasta entonces <b class="mono">v${esc(actual)}</b> sigue siendo la versión oficial y es la que todos deben usar.</div>
     ${comoSeUsa('Quién hace qué, y dónde', [
@@ -1905,8 +1909,15 @@ function cajaGenerar(idCampo, codigo, version, origen, idFecha){
   const F = formatoDe(codigo); if (!F) return '';
   const fArg = idFecha ? `'${idFecha}'` : 'null';
   return `<div class="completo aviso-caja info" style="margin:0">
-    <b>Este documento se genera desde el sistema.</b> Su contenido vive en la tabla <b>«${esc(F.tabla)}»</b>.
-    En vez de subir un Excel hecho a mano, el sistema arma el formato oficial —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— con lo que hoy tiene la tabla.
+    <b>Este documento se genera desde el sistema.</b> Su contenido vive en la tabla <b>«${esc(F.tabla)}»</b> de QuintaDB.
+    No hay que descargar nada ni armar un Excel a mano: el botón lee la tabla, arma el formato oficial —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
+    <ol style="margin:8px 0 0 18px;padding:0">
+      <li>Antes, corrige lo que haga falta <b>en la tabla «${esc(F.tabla)}»</b>. Lo que está en la tabla es lo que saldrá en el formato.</li>
+      ${idFecha?'<li>Escribe arriba la <b>fecha de aprobación</b>: va impresa en el encabezado.</li>':''}
+      <li>Pulsa <b>«Generar el formato y cargarlo»</b>. En unos segundos el archivo aparece en la lista de archivos de este formulario.</li>
+      <li>Si quieres verlo antes, usa <b>«Solo descargar para revisar»</b>: baja una copia a tu computadora, pero no la sube.</li>
+      <li>Termina con el botón de abajo, <b>${idFecha?'«Subir como v' + esc(version) + ' vigente»':'«Iniciar flujo de aprobación»'}</b>.${idFecha?' La versión anterior pasa a obsoleta.':''}</li>
+    </ol>
     <div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn sm" onclick="generarEnCampo('${idCampo}','${esc(codigo)}','${esc(version)}','${origen}',${fArg})">Generar el formato y cargarlo</button>
       <button type="button" class="btn g sm" onclick="descargarFormato('${esc(codigo)}','${esc(version)}',${fArg})">Solo descargar para revisar</button>
