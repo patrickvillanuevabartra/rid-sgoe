@@ -1240,6 +1240,7 @@ function formVersionAprobada(codigo){
   </div>
   <div class="modal-pie"><button class="btn n" onclick="${volver}">Cancelar</button>
     <button class="btn" onclick="guardarVersionAprobada('${esc(codigo)}')">Subir como v${prox} vigente</button></div>`, true);
+  sugerirCambio(codigo, prox, 'vaDesc');
 }
 async function guardarVersionAprobada(codigo){
   // El acta es opcional mientras el sistema se termina de estructurar.
@@ -1811,9 +1812,21 @@ FORMATOS['FI-GCA-MT-002'] = {
     D: { nombre:'DEBILIDADES',   entidad:'a5W6vwW4ndVOkkWQtdM8kg', campo:'Debilidad' },
     A: { nombre:'AMENAZAS',      entidad:'ddLmklpYHlqOGGWRauyf8c', campo:'Amenaza' }
   },
-  elaborado: 'Unidad de Calidad y Acreditación'
+  elaborado: 'Unidad de Calidad y Acreditación',
+  /* Texto sugerido para «Qué cambió», por versión. Se pre-llena en el
+     formulario y la persona lo puede editar antes de guardar. */
+  sugerenciaCambio: {
+    2: 'Actualización integral de la matriz FODA con los factores registrados en el sistema del SGOE: se incorporan nuevos factores, se reformulan otros y se reclasifican D11 como F10, A5 como D12 y F7 como O16. Se elimina A14 por duplicar a A7; por eso la numeración de las amenazas pasa de A13 a A15.'
+  }
 };
 const formatoDe = codigo => FORMATOS[String(codigo||'').trim().toUpperCase()] || null;
+/* Pre-llena «Qué cambió» con el texto sugerido para esa versión, si lo hay y
+   el campo está vacío. Va al control de cambios de la carátula. */
+function sugerirCambio(codigo, version, idCampo){
+  const F = formatoDe(codigo), t = F && F.sugerenciaCambio && F.sugerenciaCambio[parseInt(version, 10)];
+  const el = $(idCampo);
+  if (t && el && !el.value.trim()) el.value = t;
+}
 /* Tablas de QuintaDB de las que sale un formato (una o varias). */
 const entidadesDe = F => F.cuadrantes ? Object.values(F.cuadrantes).map(c => c.entidad) : [F.entidad];
 
@@ -2251,6 +2264,7 @@ function formDocumento(modo, codigo){
     <button class="btn" onclick="enviarDocumento('${modo}','${esc(codigo||'')}')">${modo==='existente'?'Registrar como vigente':'Iniciar flujo de aprobación'}</button></div>`);
   // El campo de revisores arranca con una línea vacía (o con las que ya había).
   if (modo === 'existente') setTimeout(() => sembrarVarios('eReviso', '', 'Ej. Ing. Patricia Vega Denegri'), 0);
+  if (modo === 'Modificación' && doc) sugerirCambio(doc.codigo, siguienteVersion(doc.version), 'fJust');
 }
 
 /* Avisa cuál falta, no una lista de cuatro donde tres están llenos. Deja el
