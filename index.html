@@ -830,6 +830,7 @@ function vTablero(){
     <div><b>${reg?nObs:'—'}</b><span>Observ. abiertas</span></div>
     <div><b>${reg?S.totalReg:'—'}</b><span>Registros</span></div>
   </div>
+  <div id="avisoTablas"></div>
   ${reg?desplegable('Cómo funciona el repositorio, en cuatro pasos', tiraFlujo(-1) + comoSeUsa('Los cuatro pasos, con el lugar exacto', [
     'Un <b>documento nuevo</b> se pide desde <b>Lista maestra → + Solicitar nuevo documento</b>.',
     'Un <b>cambio o una baja</b> se piden abriendo el documento en la Lista maestra y usando <b>Solicitar modificación</b> o <b>Solicitar anulación</b>.',
@@ -852,6 +853,7 @@ function vTablero(){
     <div class="caja" style="grid-column:1/-1"><h3>Aprobados recientemente</h3>${recientes.length?`<div class="lista-tareas">${recientes.map(d=>`
       <div class="tarea" onclick="abrirDocumento('${esc(d.codigo)}')"><span class="cod" style="width:130px">${esc(d.codigo)}</span><div style="flex:1" class="t-tit">${esc(d.titulo)}</div><span class="sub mono">v${esc(ver(d.version))} · ${fechaCorta(d.fechaAprobacion)}</span></div>`).join('')}</div>`:`<div class="vacio">Aún no hay documentos registrados.${S.perfil.puede.registrarExistente?'<br><span class="sub">Empieza por «Lista maestra → Registrar documento ya aprobado» con la Política de calidad, el Alcance y las guías.</span>':''}</div>`}</div>
   </div>`;
+  if (reg) revisarTablas();
 }
 
 /* -------------------------------------------------------- lista maestra */
@@ -987,6 +989,13 @@ async function abrirDocumento(codigo, pestana){
     const d = await api('/documento', { codigo });
     S.ficha = d;
     pintarFicha(pestana || 'ficha');
+    // Si el documento se genera de una tabla, se revisa en segundo plano si la
+    // tabla cambió después de publicada la versión; el aviso aparece al llegar.
+    if (formatoDe(codigo) && S.perfil.registrado && !CAMBIOS[codigo]){
+      comprobarTabla(codigo).then(c => {
+        if (c && c.cambio && S.ficha && S.ficha.documento.codigo === codigo && $('modales').innerHTML) pintarFicha(S.pestanaFicha || 'ficha');
+      });
+    }
   }catch(e){ aviso(e.message, true); }
 }
 function cerrarModal(){ $('modales').innerHTML=''; document.body.classList.remove('con-modal'); }
@@ -1048,8 +1057,10 @@ function pintarFicha(pestana){
   const reg = S.perfil.registrado;
   const tabs = [['ficha','Ficha'],['versiones',`Versiones (${versiones.length})`]].concat(reg?[['observaciones',`Observaciones (${observaciones.length})`],['flujo',`Solicitudes (${solicitudes.length})`]]:[]);
 
+  S.pestanaFicha = pestana;
   let cuerpo = '';
   if (pestana==='ficha') cuerpo = `
+    ${reg ? avisoCambioTabla(d) : ''}
     <div class="solo-impresion"><b>COPIA NO CONTROLADA.</b> Impresa el ${fechaCorta(S.hoy)} por ${esc(S.perfil.nombre)}. Verifique la vigencia en el Repositorio de Información Documentada del SGOE antes de usarla.</div>
     ${d.solicitudEnCurso?`<div class="aviso-caja info">Este documento tiene la solicitud <b class="mono">${esc(d.solicitudEnCurso)}</b> en curso. La versión vigente sigue siendo la oficial hasta su aprobación.</div>`:''}
     <dl class="meta">
@@ -1070,7 +1081,7 @@ function pintarFicha(pestana){
       <dt>Medio</dt><dd>${esc(d.medio||'Digital')}</dd>
       ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
-  if (pestana==='versiones') cuerpo = (reg ? avisoVersionesFaltantes(d, versiones) + notaActualizarVersion(d) : '')
+  if (pestana==='versiones') cuerpo = (reg ? avisoCambioTabla(d) + avisoVersionesFaltantes(d, versiones) + notaActualizarVersion(d) : '')
     + (versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
     <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(ver(v.version))}</b> ${etiEstado(v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
     <div class="h-txt">${esc(v.descripcion)}</div>
@@ -1191,6 +1202,7 @@ async function guardarVersionAprobada(codigo){
       revisado:$('vaReviso').value.trim(), aprobado:$('vaAprobo').value.trim(),
       descripcionCambio:$('vaDesc').value.trim(), enlace:$('vaArchivo').value });
     aviso(`${codigo} quedó vigente en v${r.version}. La v${r.anterior} pasó a obsoleta.`);
+    delete CAMBIOS[codigo];   // la versión nueva ya recoge la tabla: el aviso se recalcula
     await recargar(); abrirDocumento(codigo, 'versiones');
   }catch(e){ aviso(e.message, true); }
 }
@@ -1869,6 +1881,53 @@ function descargarBlob(blob, nombre){
   a.href = URL.createObjectURL(blob); a.download = nombre;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ¿La tabla cambió después de publicada la versión vigente?
+   Se compara la fecha del último cambio en QuintaDB (el registro modificado o
+   agregado más reciente) con la fecha en que se publicó la versión vigente en el
+   RID. Si la tabla es más nueva, el documento oficial quedó atrasado y se avisa.
+   Límite conocido: QuintaDB no deja rastro de las filas BORRADAS, así que una
+   fila eliminada sin otro cambio no dispara el aviso. */
+const CAMBIOS = {};   // por código: { cambio, ultimo, ref, cuando }
+const fechaLima = iso => { try{ return new Date(iso).toLocaleDateString('en-CA', { timeZone:'America/Lima' }); }catch(e){ return ''; } };
+async function comprobarTabla(codigo){
+  const F = formatoDe(codigo), d = (S.docs || []).find(x => x.codigo === codigo);
+  if (!F || !d || d.estado !== 'Vigente') return null;
+  const previo = CAMBIOS[codigo];
+  if (previo && Date.now() - previo.cuando < 5 * 60000) return previo;   // no se relee en cada clic
+  try{
+    const registros = await leerTablaQuinta(F.entidad);
+    const ultimo = registros.map(r => fechaLima(r.updated_at || r.created_at || '')).filter(Boolean).sort().pop() || '';
+    const ref = [d.fechaAprobacion || '', String(d.actualizado || '').slice(0, 10)].sort().pop();
+    return (CAMBIOS[codigo] = { cambio: !!(ultimo && ref && ultimo > ref), ultimo, ref, cuando: Date.now() });
+  }catch(e){ return null; }   // sin conexión a la tabla no se avisa nada: no es un error del usuario
+}
+function avisoCambioTabla(d){
+  const c = CAMBIOS[d.codigo], F = formatoDe(d.codigo);
+  if (!c || !c.cambio || !F) return '';
+  const prox = siguienteVersion(d.version);
+  const puede = S.perfil.puede.registrarExistente && !d.solicitudEnCurso;
+  return `<div class="aviso-caja" style="background:#fff4d6;border-color:#e0a800;margin:0 0 12px">
+    <b>⚠ La tabla «${esc(F.tabla)}» cambió después de publicarse la v${esc(ver(d.version))}.</b>
+    Último cambio en QuintaDB: <b>${fechaCorta(c.ultimo)}</b>. Versión vigente publicada: <b>${fechaCorta(c.ref)}</b>.
+    <br>El documento oficial <b>no incluye esos cambios</b>. Cuando estén aprobados, publique la <b>v${prox}</b>:
+    botón <b>«Subir v${prox} ya aprobada»</b> → <b>«Generar el formato y cargarlo»</b>.
+    ${puede?`<div style="margin-top:8px"><button class="btn sm" onclick="formVersionAprobada('${esc(d.codigo)}')">Publicar la v${prox} ahora</button></div>`:''}</div>`;
+}
+/* En el tablero: lista de documentos que quedaron atrasados respecto de su tabla. */
+async function revisarTablas(){
+  const caja = $('avisoTablas'); if (!caja) return;
+  const codigos = Object.keys(FORMATOS).filter(c => (S.docs || []).some(d => d.codigo === c && d.estado === 'Vigente'));
+  await Promise.all(codigos.map(comprobarTabla));
+  const atrasados = codigos.map(c => S.docs.find(d => d.codigo === c)).filter(d => CAMBIOS[d.codigo] && CAMBIOS[d.codigo].cambio);
+  if (!$('avisoTablas')) return;
+  $('avisoTablas').innerHTML = atrasados.length ? `<div class="aviso-caja" style="background:#fff4d6;border-color:#e0a800;margin:0 0 14px">
+    <b>⚠ ${atrasados.length === 1 ? 'Un documento tiene' : atrasados.length + ' documentos tienen'} cambios en QuintaDB sin publicar.</b>
+    Su tabla se modificó después de publicarse la versión vigente. Ábrelo para ver el detalle y publicar la versión nueva.
+    <div class="lista-tareas" style="margin-top:8px">${atrasados.map(d => `<div class="tarea" onclick="abrirDocumento('${esc(d.codigo)}')">
+      <span class="cod" style="width:130px">${esc(d.codigo)}</span><div style="flex:1" class="t-tit">${esc(d.titulo)}</div>
+      <span class="sub">v${esc(ver(d.version))} publicada ${fechaCorta(CAMBIOS[d.codigo].ref)} · tabla cambiada ${fechaCorta(CAMBIOS[d.codigo].ultimo)}</span></div>`).join('')}</div></div>` : '';
 }
 
 /* Solo descargar, para revisarlo antes de publicarlo. No sube nada. */
