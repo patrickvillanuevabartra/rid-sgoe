@@ -1797,7 +1797,25 @@ const FORMATOS = {
     altoFila: 61.5
   }
 };
+/* La Matriz FODA es otra clase de formato: un documento A4 vertical con
+   carátula (control de emisión y de cambios) y cuadrantes F | O y D | A. Sale
+   en PDF y se arma con cuatro tablas, una por cuadrante. Las estrategias
+   (FODA cruzado) no entran: el documento es solo la matriz. */
+FORMATOS['FI-GCA-MT-002'] = {
+  tipo: 'foda',
+  tabla: 'Fortaleza, Oportunidad, Debilidad y Amenaza',
+  titulo: 'MATRIZ FODA',
+  cuadrantes: {
+    F: { nombre:'FORTALEZAS',    entidad:'a9DvtcKg1cQjv1tmklCKHI', campo:'Fortaleza' },
+    O: { nombre:'OPORTUNIDADES', entidad:'cCn3pdNt9odOogW4euW5Xw', campo:'Oportunidad' },
+    D: { nombre:'DEBILIDADES',   entidad:'a5W6vwW4ndVOkkWQtdM8kg', campo:'Debilidad' },
+    A: { nombre:'AMENAZAS',      entidad:'ddLmklpYHlqOGGWRauyf8c', campo:'Amenaza' }
+  },
+  elaborado: 'Unidad de Calidad y Acreditación'
+};
 const formatoDe = codigo => FORMATOS[String(codigo||'').trim().toUpperCase()] || null;
+/* Tablas de QuintaDB de las que sale un formato (una o varias). */
+const entidadesDe = F => F.cuadrantes ? Object.values(F.cuadrantes).map(c => c.entidad) : [F.entidad];
 
 function cargarExcelJS(){
   if (window.ExcelJS) return Promise.resolve();
@@ -1845,6 +1863,7 @@ const dosDigitos = v => String(parseInt(v, 10) || 1).padStart(2, '0');
 async function generarFormato(codigo, version, fecha){
   const F = formatoDe(codigo);
   if (!F) throw new Error('Este documento no tiene una tabla del sistema asociada.');
+  if (F.tipo === 'foda') return generarFODA(codigo, version, fecha);
   const doc = (S.docs || []).find(d => d.codigo === codigo) || {};
   cargando(true);
   try{
@@ -1926,6 +1945,122 @@ async function generarFormato(codigo, version, fecha){
   } finally { cargando(false); }
 }
 
+/* ------------------------------------------------ Matriz FODA en PDF */
+function cargarScript(src){
+  return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok;
+    s.onerror = () => mal(new Error('No se pudo cargar el generador de PDF. Revisa tu conexión y vuelve a intentar.'));
+    document.head.appendChild(s); });
+}
+async function cargarJsPDF(){
+  if (!(window.jspdf && window.jspdf.jsPDF)) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const prueba = new window.jspdf.jsPDF();
+  if (typeof prueba.autoTable !== 'function') await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+}
+/* La fuente del PDF solo trae los caracteres del español y algunos signos:
+   lo demás (flechas, emojis) se cambia por algo legible para que no salga basura. */
+const pdfTxt = t => String(t == null ? '' : t).normalize('NFC')
+  .replace(/[→⇒➔➜]/g, '->').replace(/[←]/g, '<-').replace(/≥/g, '>=').replace(/≤/g, '<=')
+  .replace(/[^\x00-\xFF“”‘’–—•…€]/g, '');
+/* Cada factor viene escrito «F1: texto» (a veces «F10.» o con dos espacios).
+   Se separan código y texto, se ordena por número y se escribe «F1. texto»,
+   como en la versión publicada. */
+function factoresFODA(registros, letra, campo){
+  return registros.map(r => pdfTxt((r.values || {})[campo] || '').replace(/\s+/g, ' ').trim()).filter(Boolean).map(t => {
+    const m = new RegExp('^' + letra + '\\s*(\\d+)\\s*[:.\\-–]?\\s*(.*)$', 'i').exec(t);
+    return m ? { n:parseInt(m[1], 10), texto:m[2] } : { n:9999, texto:t };
+  }).sort((a, b) => a.n - b.n).map(x => x.n === 9999 ? x.texto : `${letra}${x.n}. ${x.texto}`);
+}
+/* Datos de la carátula: los toma del formulario que está abierto (subir versión
+   ya aprobada o actualizar) y del historial de versiones del documento. */
+function datosCaratula(codigo, version){
+  const v = id => pdfTxt(($(id) && $(id).value.trim()) || '');
+  const historial = (S.ficha && S.ficha.documento && S.ficha.documento.codigo === codigo ? S.ficha.versiones || [] : [])
+    .map(x => ({ version:parseInt(ver(x.version), 10) || 0, descripcion:pdfTxt(x.descripcion || '') }))
+    .filter(x => x.version && x.version < version);
+  if (!historial.some(x => x.version === 1)) historial.push({ version:1, descripcion:'Elaboración del documento' });
+  historial.sort((a, b) => a.version - b.version);
+  historial.push({ version, descripcion: v('vaDesc') || v('fJust') || 'Actualización de la matriz con los factores registrados en el sistema del SGOE.' });
+  return { elaboro: v('vaElaboro'), reviso: v('vaReviso'), aprobo: v('vaAprobo'), historial };
+}
+async function generarFODA(codigo, version, fecha){
+  const F = formatoDe(codigo), num = parseInt(version, 10) || 1;
+  cargando(true);
+  try{
+    await cargarJsPDF();
+    const letras = Object.keys(F.cuadrantes);
+    const tablas = await Promise.all(letras.map(k => leerTablaQuinta(F.cuadrantes[k].entidad)));
+    const fac = {}; letras.forEach((k, i) => fac[k] = factoresFODA(tablas[i], k, F.cuadrantes[k].campo));
+    const total = letras.reduce((a, k) => a + fac[k].length, 0);
+    if (!total) throw new Error('Las tablas de la Matriz FODA están vacías: no hay nada que poner en el documento.');
+    const car = datosCaratula(codigo, num);
+
+    const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+    const W = 210, M = 14, ancho = W - 2 * M;
+    let logo = null;
+    try{ const b = await (await fetch('img/logo-urp.jpg')).blob(); logo = 'data:image/jpeg;base64,' + await leerBase64(b); }catch(e){}
+    const gris = [217, 217, 217], negro = [0, 0, 0];
+    const lin = () => { pdf.setDrawColor(...negro); pdf.setLineWidth(0.25); };
+
+    // Encabezado de cada hoja, igual al del documento publicado
+    const encabezado = () => {
+      lin(); const y = 10, h = 22, cLogo = 26, cDer = 42;
+      pdf.rect(M, y, ancho, h);
+      pdf.line(M + cLogo, y, M + cLogo, y + h); pdf.line(W - M - cDer, y, W - M - cDer, y + h);
+      pdf.line(M + cLogo, y + 15, W - M - cDer, y + 15);
+      if (logo) pdf.addImage(logo, 'JPEG', M + 3, y + 1.5, 19, 19);
+      const cx = M + cLogo + (ancho - cLogo - cDer) / 2;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.text('UNIVERSIDAD RICARDO PALMA', cx, y + 6.5, { align:'center' });
+      pdf.setFontSize(9.5); pdf.text('FACULTAD DE INGENIERÍA', cx, y + 11.5, { align:'center' });
+      pdf.setFontSize(11); pdf.text(F.titulo, cx, y + 20, { align:'center' });
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+      const xd = W - M - cDer, filas = [codigo, `Versión: ${dosDigitos(num)}`, `Fecha: ${fecha ? fechaCorta(fecha) : 'por aprobar'}`, ''];   // la hoja se numera al final
+      filas.forEach((t, i) => { const yy = y + i * (h / 4); if (i) pdf.line(xd, yy, W - M, yy); pdf.text(t, W - M - 2, yy + 3.8, { align:'right' }); });
+    };
+    const pie = () => {
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(7); pdf.setTextColor(60);
+      pdf.line(M, 284, W - M, 284);
+      pdf.text('“Toda copia de este documento, sea del repositorio de documentos o del documento original en físico es considerada “copia no controlada”.', W / 2, 288, { align:'center', maxWidth:ancho });
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5);
+      pdf.text(`Generado desde el aplicativo del SGOE (tablas ${F.tabla}) el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`, W / 2, 292, { align:'center' });
+      pdf.setTextColor(0);
+    };
+    const tabla = (o) => pdf.autoTable(Object.assign({ margin:{ top:38, left:M, right:M, bottom:18 }, theme:'grid',
+      styles:{ font:'helvetica', fontSize:9, cellPadding:1.8, lineColor:negro, lineWidth:0.2, textColor:negro, valign:'top', overflow:'linebreak' },
+      headStyles:{ fillColor:gris, textColor:negro, fontStyle:'bold', halign:'center' },
+      didDrawPage:() => { encabezado(); pie(); } }, o));
+
+    // Hoja 1: carátula
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.text(F.titulo, W / 2, 80, { align:'center' });
+    pdf.setFontSize(11); pdf.text('CONTROL DE EMISIÓN', W / 2, 120, { align:'center' });
+    tabla({ startY:123, head:[['Elaborado por:', 'Revisado por:', 'Aprobado por:']],
+      body:[[car.elaboro || F.elaborado, car.reviso, car.aprobo]], bodyStyles:{ minCellHeight:32, halign:'center', valign:'middle' } });
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+    const yc = pdf.lastAutoTable.finalY + 14; pdf.text('CONTROL DE CAMBIOS', W / 2, yc, { align:'center' });
+    tabla({ startY:yc + 3, head:[['Versión', 'Sección del documento', 'Descripción del cambio']],
+      body:car.historial.map(h => [dosDigitos(h.version), h.version === 1 ? '---' : 'Matriz FODA', h.descripcion]),
+      columnStyles:{ 0:{ halign:'center', cellWidth:22 }, 1:{ halign:'center', cellWidth:45 } } });
+
+    // Cuadrantes: F | O en una sección y D | A en otra, emparejados fila a fila
+    const par = (a, b) => { const n = Math.max(fac[a].length, fac[b].length);
+      return Array.from({ length:n }, (_, i) => [fac[a][i] || '', fac[b][i] || '']); };
+    [['F', 'O'], ['D', 'A']].forEach(([a, b], i) => {
+      pdf.addPage();
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text(F.titulo, M, 43);
+      tabla({ startY:46, head:[[F.cuadrantes[a].nombre, F.cuadrantes[b].nombre]], body:par(a, b),
+        columnStyles:{ 0:{ cellWidth:ancho / 2 }, 1:{ cellWidth:ancho / 2 } }, rowPageBreak:'avoid' });
+    });
+
+    // Numeración de hojas
+    const tot = pdf.getNumberOfPages();
+    for (let p = 1; p <= tot; p++){ pdf.setPage(p);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(`Hoja: ${p} de ${tot}`, W - M - 2, 30.3, { align:'right' }); }
+
+    const blob = pdf.output('blob');
+    const nombre = `${codigo}_Matriz_FODA_v${dosDigitos(num)}.pdf`;
+    return { blob, nombre, filas:total };
+  } finally { cargando(false); }
+}
+
 function descargarBlob(blob, nombre){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = nombre;
@@ -1968,7 +2103,7 @@ async function comprobarTabla(codigo){
   const previo = CAMBIOS[codigo];
   if (previo && Date.now() - previo.cuando < 5 * 60000) return previo;   // no se relee en cada clic
   try{
-    const registros = await leerTablaQuinta(F.entidad);
+    const registros = (await Promise.all(entidadesDe(F).map(leerTablaQuinta))).flat();
     const fechaDe = r => fechaLima(r.updated_at || r.updatedAt || r.created_at || r.createdAt || '');
     const ultimo = registros.map(fechaDe).filter(esFecha).sort().pop() || '';
     const ref = [fechaLima(d.fechaAprobacion), fechaLima(d.actualizado)].filter(esFecha).sort().pop() || '';
@@ -1982,7 +2117,7 @@ function avisoCambioTabla(d){
   const prox = siguienteVersion(d.version);
   const puede = S.perfil.puede.registrarExistente && !d.solicitudEnCurso;
   return `<div class="aviso-caja" style="background:#fff4d6;border-color:#e0a800;margin:0 0 12px">
-    <b>⚠ La tabla «${esc(F.tabla)}» cambió después de publicarse la v${esc(ver(d.version))}.</b>
+    <b>⚠ ${F.cuadrantes ? 'Las tablas' : 'La tabla'} «${esc(F.tabla)}» ${F.cuadrantes ? 'cambiaron' : 'cambió'} después de publicarse la v${esc(ver(d.version))}.</b>
     Último cambio en QuintaDB: <b>${fechaCorta(c.ultimo)}</b>. Versión vigente publicada: <b>${fechaCorta(c.ref)}</b>.
     <br>El documento oficial <b>no incluye esos cambios</b>. Cuando estén aprobados, publique la <b>v${prox}</b>:
     botón <b>«Subir v${prox} ya aprobada»</b> → <b>«Generar el formato y cargarlo»</b>.
@@ -2042,9 +2177,10 @@ function cajaGenerar(idCampo, codigo, version, origen, idFecha){
   const fArg = idFecha ? `'${idFecha}'` : 'null';
   return `<div class="completo aviso-caja info" style="margin:0">
     <b>Este documento se genera desde el sistema.</b> Su contenido vive en la tabla <b>«${esc(F.tabla)}»</b> de QuintaDB.
-    No hay que descargar nada ni armar un Excel a mano: el botón lee la tabla, arma el formato oficial —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
+    No hay que descargar nada ni armar el documento a mano: el botón lee ${F.cuadrantes ? 'las tablas' : 'la tabla'}, arma el formato oficial${F.tipo === 'foda' ? ' en PDF' : ''} —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
     <ol style="margin:8px 0 0 18px;padding:0">
-      <li>Antes, corrige lo que haga falta <b>en la tabla «${esc(F.tabla)}»</b>. Lo que está en la tabla es lo que saldrá en el formato.</li>
+      <li>Antes, corrige lo que haga falta <b>en ${F.cuadrantes ? 'las tablas' : 'la tabla'} «${esc(F.tabla)}»</b>. Lo que está ahí es lo que saldrá en el formato.</li>
+      ${F.tipo === 'foda' ? '<li>Llena arriba <b>Elaboró, Revisó y Aprobó</b> y <b>qué cambió</b>: van en la carátula, en el control de emisión y en el control de cambios.</li>' : ''}
       ${idFecha?'<li>Escribe arriba la <b>fecha de aprobación</b>: va impresa en el encabezado.</li>':''}
       <li>Pulsa <b>«Generar el formato y cargarlo»</b>. En unos segundos el archivo aparece en la lista de archivos de este formulario.</li>
       <li>Si quieres verlo antes, usa <b>«Solo descargar para revisar»</b>: baja una copia a tu computadora, pero no la sube.</li>
@@ -2054,7 +2190,7 @@ function cajaGenerar(idCampo, codigo, version, origen, idFecha){
       <button type="button" class="btn sm" onclick="generarEnCampo('${idCampo}','${esc(codigo)}','${esc(version)}','${origen}',${fArg})">Generar el formato y cargarlo</button>
       <button type="button" class="btn g sm" onclick="descargarFormato('${esc(codigo)}','${esc(version)}',${fArg})">Solo descargar para revisar</button>
     </div>
-    <div class="sub" style="margin-top:6px">Si algo está mal en el formato, la corrección se hace en la tabla del sistema, no en el Excel: así la próxima versión ya sale bien.</div></div>`;
+    <div class="sub" style="margin-top:6px">Si algo está mal en el formato, la corrección se hace en la tabla del sistema, no en el archivo: así la próxima versión ya sale bien.</div></div>`;
 }
 
 const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
