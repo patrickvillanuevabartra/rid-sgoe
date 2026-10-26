@@ -668,6 +668,42 @@ function vistaPrevia(url){
   return url;
 }
 
+/* Muestra el archivo de UNA versión, no el del documento vigente.
+   El botón «Ver archivo» de la carpeta Versiones obsoletas llamaba a
+   vistaPrevia(), que solo calcula la dirección del visor y no abre nada: por
+   eso el clic no hacía nada. Ahora abre la versión en el mismo visor de la
+   ficha, con la banda roja y la marca de agua de obsoleta, para que nadie la
+   confunda con la oficial (lo que pide el 7.5.3 de la norma). */
+function datosVersion(codigo, version){
+  const k = String(ver(version));
+  const a = (S.versObs || []).find(v => v.codigo === codigo && String(ver(v.version)) === k);
+  if (a) return { enlace:a.enlace, estado:'Obsoleta', vigente:a.versionVigente, titulo:a.titulo, fecha:a.fecha, docBaja:a.estadoDocumento !== 'Vigente' };
+  const f = S.ficha && S.ficha.documento && S.ficha.documento.codigo === codigo ? S.ficha : null;
+  const b = f ? (f.versiones || []).find(v => String(ver(v.version)) === k) : null;
+  if (b) return { enlace:b.enlace, estado:b.estado, vigente:f.documento.version, titulo:f.documento.titulo, fecha:b.fecha, docBaja:f.documento.estado !== 'Vigente' };
+  return null;
+}
+function verArchivoVersion(codigo, version, desde){
+  const v = datosVersion(codigo, version);
+  if (!v || !v.enlace) return aviso('Esta versión no tiene archivo registrado', true);
+  const previa = vistaPrevia(v.enlace);
+  const obs = v.estado !== 'Vigente';
+  const volver = desde === 'ficha' ? `abrirDocumento('${esc(codigo)}','versiones')` : 'cerrarModal()';
+  modal(`<div class="modal-cab"><div style="flex:1"><div class="sub"><span class="cod">${esc(codigo)}</span> · ${esc(v.titulo||'')}</div>
+    <h2>Versión v${esc(ver(version))}${obs?' · obsoleta':' · vigente'}</h2></div><button class="cerrar" onclick="${volver}">×</button></div>
+  ${obs?`<div class="aviso-caja" style="margin:12px 18px;border-color:var(--falla)"><b>Esta versión ya no es la oficial.</b>
+    ${v.docBaja ? 'Además, el documento completo está dado de baja.' : `Fue reemplazada: hoy el documento va en <b class="mono">v${esc(ver(v.vigente))}</b>.`}
+    Se muestra solo como referencia histórica; no la uses para trabajar.
+    ${v.docBaja ? '' : `<a href="#" onclick="abrirDocumento('${esc(codigo)}');return false">Ver la versión vigente</a>`}</div>`:''}
+  <div class="visor" style="border:0">
+    <div class="visor-banda ${obs?'obsoleto':''}"><span>${obs?'Versión obsoleta · solo referencia':'Copia controlada · vigente'}</span><span class="espacio"></span>
+      <span class="mono" style="text-transform:none;letter-spacing:0;font-weight:500">${esc(codigo)} v${esc(ver(version))}${v.fecha?' · aprobada el '+fechaCorta(v.fecha):''}</span></div>
+    <div class="visor-marco">${previa?`<iframe src="${esc(previa)}" allow="autoplay" loading="lazy"></iframe><div class="marca-agua ${obs?'obsoleto':''}">${obs?'<span>OBSOLETO</span>':''}</div>`:'<div class="sin-archivo">No se pudo mostrar el archivo.</div>'}</div>
+  </div>
+  <div class="modal-pie"><a class="btn n" href="${esc(enlacePrincipal(v.enlace))}" target="_blank" rel="noopener">Abrir en Drive</a>
+    <button class="btn" onclick="${volver}">Volver</button></div>`, true);
+}
+
 /* Dos cosas distintas que la tabla llama igual, y de ahí venía la confusión:
      · ANULAR (= dar de baja) le pasa al DOCUMENTO: se retira entero y deja de
        aplicar. La columna «Estado» de documentos guarda esto con el valor
@@ -965,7 +1001,7 @@ function pintarVersObs(){
       <td class="mono">${v.reemplazadaPor?'v'+esc(ver(v.reemplazadaPor)):'<span class="sub">—</span>'}</td>
       <td class="sub">${fechaCorta(v.fecha)}</td>
       <td><div>${esc(v.tipoCambio||'—')}</div>${v.descripcion?`<div class="sub">${esc(String(v.descripcion).slice(0,120))}${String(v.descripcion).length>120?'…':''}</div>`:''}</td>
-      <td style="white-space:nowrap">${v.enlace?`<button class="btn g sm" onclick="event.stopPropagation();vistaPrevia('${esc(v.enlace)}')">Ver archivo</button>`:'<span class="sub">sin archivo</span>'}</td>
+      <td style="white-space:nowrap">${v.enlace?`<button class="btn g sm" onclick="event.stopPropagation();verArchivoVersion('${esc(v.codigo)}','${esc(v.version)}')">Ver archivo</button>`:'<span class="sub">sin archivo</span>'}</td>
     </tr>`).join('') : `<tr><td colspan="7" class="vacio">No hay versiones obsoletas.<br><span class="sub">${(S.versObs||[]).length
       ? 'Ninguna coincide con esos filtros.'
       : 'Todavía ningún documento ha cambiado de versión dentro del repositorio. Los que se cargaron con «Registrar documento ya aprobado» entraron directamente en su versión actual, así que sus versiones anteriores nunca estuvieron aquí. La primera aparecerá cuando se apruebe una actualización desde el aplicativo.'}</span></td></tr>`;
@@ -1086,7 +1122,7 @@ function pintarFicha(pestana){
     <div class="hito ${v.estado==='Vigente'?'vigente':''}"><div class="h-cab"><b class="mono">v${esc(ver(v.version))}</b> ${etiEstado(v.estado)} <span class="sub">${fechaCorta(v.fecha)} · ${esc(v.tipoCambio)}</span></div>
     <div class="h-txt">${esc(v.descripcion)}</div>
     <div class="sub">Elaboró: ${esc(v.elaborado||'—')} · Revisó: ${esc(v.revisado||'—')} · Aprobó: ${esc(v.aprobado||'—')} · ${esc(v.documentoAprobacion||'')}${v.solicitud?` · <span class="mono">${esc(v.solicitud)}</span>`:''}
-    ${v.enlace?` · <a href="${esc(v.enlace)}" target="_blank" rel="noopener">archivo</a>`:''}</div></div>`).join('')}</div>` : '<div class="vacio">Sin historial de versiones.</div>');
+    ${v.enlace?` · <a href="#" onclick="verArchivoVersion('${esc(d.codigo)}','${esc(v.version)}','ficha');return false">ver archivo de la v${esc(ver(v.version))}</a>`:''}</div></div>`).join('')}</div>` : '<div class="vacio">Sin historial de versiones.</div>');
   if (pestana==='observaciones') cuerpo = `
     ${p.observar?`<div class="caja" style="margin-bottom:12px;padding:12px">
       <div class="campos"><div class="campo completo"><label>Tipo</label><select id="obsTipo">${opciones(TIPOS_OBS,'Observación')}</select>
