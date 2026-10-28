@@ -169,6 +169,16 @@ tbody tr.clic:hover{background:#f8fbf9}
 .sin-archivo{display:grid;place-items:center;height:100%;color:var(--tinta-tenue);text-align:center;padding:30px}
 .panel{display:flex;flex-direction:column;min-width:0}
 .subpestanas{display:flex;border-bottom:1px solid var(--linea);padding:0 12px}
+/* Pestañas grandes de la Lista maestra: Internos / Externos / Registros */
+.grupos-maestra{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.opciones-carga{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.opcion-carga{display:flex;flex-direction:column;gap:6px;text-align:left;border:1px solid var(--linea);background:var(--papel);border-radius:10px;padding:16px;font-size:14px;line-height:1.45;color:var(--tinta);cursor:pointer}
+.opcion-carga b{font-size:16px;color:var(--brand)}
+.opcion-carga:hover{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-suave,#d8efe5)}
+@media (max-width:640px){.opciones-carga{grid-template-columns:1fr}}
+.grupos-maestra button{border:1px solid var(--linea);border-bottom:0;background:#eef2f0;color:var(--tinta-media);padding:11px 20px;font-size:15px;font-weight:600;border-radius:10px 10px 0 0}
+.grupos-maestra button.activa{background:var(--papel);color:var(--brand);box-shadow:inset 0 3px 0 var(--brand)}
+.panel-grupo{background:var(--papel);border:1px solid var(--linea);border-radius:0 10px 10px 10px;padding:14px}
 .subpestanas button{border:0;background:none;padding:10px;color:var(--tinta-media);border-bottom:2px solid transparent;font-weight:500;font-size:13px}
 .subpestanas button.activa{color:var(--brand);border-bottom-color:var(--brand)}
 .panel-cuerpo{padding:14px 16px;overflow-y:auto;max-height:600px}
@@ -386,7 +396,6 @@ body.con-modal .asis-boton{display:none}
     <button data-vista="tablero" class="activa">Tablero</button>
     <button data-vista="maestra">Lista maestra</button>
     <button data-vista="flujo" data-req="registrado">Flujo documental<span id="cPend" class="contador oculto"></span></button>
-    <button data-vista="registros" data-req="registrado">Registros y evidencias</button>
     <button data-vista="admin" data-req="bitacora">Administración</button>
   </nav>
   <main id="principal">
@@ -408,7 +417,7 @@ body.con-modal .asis-boton{display:none}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-10-26a';
+const BACKEND_ESPERADO = '2026-10-28a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 /* Proceso deshabilitado hasta nuevo aviso. Poniendo esto en true vuelven a
    aparecer el campo del formulario, la columna de la lista maestra, sus dos
@@ -435,7 +444,7 @@ const DISPOSICION = ['Evaluar al vencer','Eliminar','Transferir a archivo centra
 let S = { cred:'', perfil:null, cat:null, cand:null, docs:[], sols:[], obsAbiertas:{}, totalReg:0, hoy:'', prefijo:'FI', registros:null, vista:'tablero' };
 /* «carpeta» es la subpestaña de la Lista maestra: vigentes y baja listan
    documentos; versiones lista las versiones reemplazadas, que son otra cosa. */
-const F = { q:'', tipo:'', origen:'', macro:'', proceso:'', programa:'', carpeta:'vigentes' };
+const F = { q:'', tipo:'', macro:'', proceso:'', programa:'', carpeta:'vigentes', grupo:'internos' };
 const FR = { q:'', categoria:'', formato:'', programa:'', periodo:'', desde:'', hasta:'', quien:'', retencion:'', agrupar:'', orden:'' };
 
 /* ------------------------------------------------------------ utilidades */
@@ -526,7 +535,7 @@ function guiaRapida(){
     <p>Tres dígitos para el correlativo y el año completo. Si el documento no tiene número propio (una lista de asistencia, un comunicado), el sistema asigna uno con la fecha del hecho: <span class="mono">REG-20260909-01</span>.</p>
 
     <h3>F. Quiero registrar una evidencia</h3>
-    ${paso(1,'Registros y evidencias → «+ Registrar evidencia»','<p>Son las pruebas de que un formato se usó: actas, listas de asistencia, informes.</p>')}
+    ${paso(1,'Lista maestra → pestaña Registros → «+ Agregar»','<p>Son las pruebas de que un formato se usó: actas, listas de asistencia, informes.</p>')}
     ${paso(2,'Elige formato, programa y periodo, y pega el enlace de Drive','<p>Indica cuántos años debe conservarse; el sistema calcula hasta cuándo y avisa al vencer.</p>')}
     ${paso(3,'Listo','<p>Las evidencias no pasan por revisión ni aprobación.</p>')}
 
@@ -824,6 +833,9 @@ document.addEventListener('click', e => {
   if (campo.querySelector(':scope > .nota-campo')) campo.classList.toggle('nota-abierta');
 });
 function mostrar(v){
+  // «Registros y evidencias» ya no es una pestaña aparte: es la tercera pestaña
+  // de la Lista maestra. Cualquier llamada vieja a mostrar('registros') llega ahí.
+  if (v === 'registros'){ F.grupo = 'registros'; v = 'maestra'; }
   S.vista = v;
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('activa', b.dataset.vista===v));
   ['tablero','maestra','flujo','registros','admin'].forEach(x => $('v-'+x).classList.toggle('oculto', x!==v));
@@ -874,7 +886,7 @@ function vTablero(){
     'Un <b>documento nuevo</b> se pide desde <b>Lista maestra → + Solicitar nuevo documento</b>.',
     'Un <b>cambio o una baja</b> se piden abriendo el documento en la Lista maestra y usando <b>Solicitar modificación</b> o <b>Solicitar anulación</b>.',
     'Lo que te toca hacer a ti siempre aparece abajo en <b>Mis pendientes</b> y en la pestaña <b>Flujo documental</b>.',
-    'Las <b>evidencias</b> (actas, listas, informes) no pasan por el flujo: se cargan en <b>Registros y evidencias</b>.'
+    'Las <b>evidencias</b> (actas, listas, informes) no pasan por el flujo: se cargan en <b>Lista maestra → pestaña Registros</b>.'
   ])):desplegable('Cómo consultar un documento', comoSeUsa('Tres pasos', [
     'Entra a la pestaña <b>Lista maestra</b>.',
     'Busca por nombre o código, o usa los filtros.',
@@ -909,7 +921,20 @@ function carpetaActual(){
   const c = F.carpeta || 'vigentes';
   return (c !== 'vigentes' && !S.perfil.registrado) ? 'vigentes' : c;
 }
-function irAMaestra(carpeta){ F.carpeta = carpeta; mostrar('maestra'); }
+function irAMaestra(carpeta, grupo){ F.carpeta = carpeta; if (grupo) F.grupo = grupo; mostrar('maestra'); }
+/* Tres pestañas, porque son tres clases de información documentada:
+     internos  → los elaboró la Facultad (procedimientos, guías, matrices…)
+     externos  → los emite otra entidad: una ley, un reglamento de la URP, una norma
+     registros → evidencia de que algo se hizo: actas, listas, informes
+   Reemplazan al selector «Internos y externos» y a la pestaña aparte
+   «Registros y evidencias». Dentro de Internos y Externos siguen las carpetas
+   de estado: Vigentes, Dados de baja y Versiones obsoletas. */
+function grupoActual(){
+  const g = F.grupo || 'internos';
+  return (g === 'registros' && !S.perfil.registrado) ? 'internos' : g;
+}
+const origenDelGrupo = () => grupoActual() === 'externos' ? 'Externo' : 'Interno';
+function irAGrupo(g){ F.grupo = g; F.carpeta = 'vigentes'; F.tipo = ''; vMaestra(); }
 /* Origen del documento. Interno: lo elaboró la Facultad. Externo: lo emite otra
    entidad (ley, reglamento de la universidad, norma ISO) y el SGOE controla qué
    versión se usa. Si el dato está vacío se toma como interno, que es el valor
@@ -921,64 +946,79 @@ const etiOrigen = d => origenDe(d) === 'Externo'
 function docsFiltrados(){
   const q = F.q.toLowerCase();
   const estado = CARPETAS[carpetaActual()] || '';
-  return S.docs.filter(d => (!F.tipo||d.tipo===F.tipo) && (!F.origen||origenDe(d)===F.origen) && (!F.macro||segsDe(d.proceso)[0]===F.macro) && (!F.proceso||d.macroproceso===F.proceso)
+  return S.docs.filter(d => (!F.tipo||d.tipo===F.tipo) && origenDe(d)===origenDelGrupo() && (!F.macro||segsDe(d.proceso)[0]===F.macro) && (!F.proceso||d.macroproceso===F.proceso)
     && (!F.programa||d.programa===F.programa) && (!estado||d.estado===estado)
     && (!q || [d.codigo,d.titulo,d.palabras,d.responsable,d.unidad].join(' ').toLowerCase().includes(q)))
     .sort((a,b)=>a.codigo.localeCompare(b.codigo));
 }
 function versObsFiltradas(){
   const q = F.q.toLowerCase();
-  return (S.versObs||[]).filter(v => (!F.tipo||v.tipo===F.tipo)
+  const deGrupo = cod => origenDe((S.docs||[]).find(d => d.codigo === cod) || {}) === origenDelGrupo();
+  return (S.versObs||[]).filter(v => deGrupo(v.codigo) && (!F.tipo||v.tipo===F.tipo)
     && (!q || [v.codigo,v.titulo,v.idVersion,v.responsable,v.unidad,v.descripcion].join(' ').toLowerCase().includes(q)));
 }
 function vMaestra(){
-  const p = S.perfil.puede;
-  const car = carpetaActual();
-  const nVersiones = (S.versObs||[]).length;
-  const carpetas = [['vigentes',`Vigentes (${S.docs.filter(d=>d.estado==='Vigente').length})`]]
-    .concat(S.perfil.registrado ? [['baja',`Dados de baja (${S.docs.filter(d=>d.estado==='Obsoleto').length})`],
-                                   ['versiones',`Versiones obsoletas (${nVersiones})`]] : []);
-  const tiposProc = [...new Set(((S.cat.rutas||[])).map(r=>r[0]))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
-  $('v-maestra').innerHTML = `
-  <div class="titulo-seccion"><div><h2>Lista maestra de documentos${tip('Es el inventario oficial de la información documentada del SGOE. Cada fila es un documento controlado: su código, la versión vigente y cuándo toca revisarlo.', true)}</h2><p>Documentos controlados del SGOE con su versión, estado y revisión programada</p></div><div class="espacio"></div>
-    <button class="btn n" onclick="exportarCSV()">Exportar CSV</button>
-    ${p.registrarExistente?'<button class="btn g" onclick="formDocumento(\'existente\')">Registrar documento ya aprobado</button>':''}
-    ${p.solicitar?'<button class="btn" onclick="formDocumento(\'Creación\')">+ Solicitar nuevo documento</button>':''}
+  const p = S.perfil.puede, reg = S.perfil.registrado;
+  const grupo = grupoActual(), origen = origenDelGrupo();
+  const docsG = S.docs.filter(d => origenDe(d) === origen);
+  const cuenta = o => S.docs.filter(d => origenDe(d) === o && d.estado === 'Vigente').length;
+  const grupos = [['internos', `Internos (${cuenta('Interno')})`], ['externos', `Externos (${cuenta('Externo')})`]]
+    .concat(reg ? [['registros', `Registros (${(S.registros||[]).length || S.totalReg || 0})`]] : []);
+  const puedeAgregar = p.solicitar || p.registrarExistente || p.registrar;
+  const cabecera = `
+  <div class="titulo-seccion"><div><h2>Lista maestra${tip('Es el inventario oficial de la información documentada del SGOE, en tres pestañas: documentos internos, documentos externos y registros.', true)}</h2><p>Documentos internos, documentos externos y registros del SGOE</p></div><div class="espacio"></div>
+    ${grupo!=='registros'?'<button class="btn n" onclick="exportarCSV()">Exportar CSV</button>':''}
+    ${puedeAgregar?'<button class="btn" onclick="elegirQueCargar()">+ Agregar</button>':''}
   </div>
+  <div class="grupos-maestra">${grupos.map(([k,t])=>`<button class="${k===grupo?'activa':''}" onclick="irAGrupo('${k}')">${t}</button>`).join('')}</div>`;
+
+  // Pestaña Registros: la vista de evidencias de siempre, ahora dentro de la Lista maestra.
+  if (grupo === 'registros'){
+    $('v-maestra').innerHTML = cabecera + '<div class="panel-grupo"><div id="maestraRegistros"></div></div>';
+    vRegistros();
+    return;
+  }
+
+  const car = carpetaActual();
+  const ext = grupo === 'externos';
+  const nVersiones = (S.versObs||[]).filter(v => origenDe(S.docs.find(d=>d.codigo===v.codigo)||{}) === origen).length;
+  const carpetas = [['vigentes',`Vigentes (${docsG.filter(d=>d.estado==='Vigente').length})`]]
+    .concat(reg ? [['baja',`Dados de baja (${docsG.filter(d=>d.estado==='Obsoleto').length})`],
+                   ['versiones',`Versiones obsoletas (${nVersiones})`]] : []);
+  const tiposProc = [...new Set(((S.cat.rutas||[])).map(r=>r[0]))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
+  $('v-maestra').innerHTML = cabecera + `
+  <div class="panel-grupo">
+  <div class="sub" style="margin-bottom:10px">${ext
+    ? 'Documentos <b>externos</b>: los emite otra entidad —una ley, un reglamento de la universidad, una norma ISO— y el SGOE solo controla qué versión se usa. El código y la fecha de aprobación son opcionales.'
+    : 'Documentos <b>internos</b>: los elaboró la Facultad de Ingeniería —procedimientos, guías, manuales, matrices— y llevan código del SGOE.'}</div>
   ${comoSeUsa('Cómo se usa esta pestaña', [
     '<b>Tres carpetas.</b> <b>Vigentes:</b> los documentos oficiales de hoy. <b>Dados de baja:</b> el documento entero se retiró y ya no aplica — «dado de baja» y «anulado» son lo mismo. <b>Versiones obsoletas:</b> versiones <b>reemplazadas</b> de documentos que siguen vigentes, como la v1 de un documento que hoy va en v2.',
-    '<b>Obsoleto no es lo mismo que anulado</b>, y conviene no mezclarlos: <b>obsoleto = reemplazado</b>, y le pasa a una versión, mientras el documento sigue vigente en su versión nueva. <b>Anulado (dado de baja) = retirado</b>, y le pasa al documento completo, que deja de aplicar.',
     '<b>Para leer un documento:</b> haz clic en su fila. Se abre la ficha con el archivo, sus versiones y sus observaciones.',
-    S.perfil.puede.solicitar ? '<b>Para crear uno nuevo:</b> botón <b>+ Solicitar nuevo documento</b> (arriba a la derecha). El borrador se carga ahí mismo, desde tu computadora.' : '<b>Para proponer un documento nuevo:</b> pídelo al responsable de tu proceso o a control documental.',
-    S.perfil.puede.solicitar ? '<b>Para cambiarlo o darlo de baja:</b> abre el documento y usa los botones <b>Solicitar modificación</b> o <b>Solicitar anulación</b> del pie de la ficha.' : '',
-    S.perfil.puede.registrarExistente ? '<b>Para cargar documentos ya aprobados antes del repositorio</b> (Política, Alcance, guías): botón <b>Registrar documento ya aprobado</b>. No pasan por el flujo.' : ''
+    puedeAgregar ? '<b>Para cargar algo nuevo:</b> botón <b>+ Agregar</b>, arriba a la derecha. Te pregunta primero qué vas a cargar —interno, externo o registro— y te lleva al formulario que corresponde.' : '',
+    p.solicitar ? '<b>Para cambiarlo o darlo de baja:</b> abre el documento y usa los botones del pie de la ficha.' : ''
   ].filter(Boolean))}
   <div class="subpestanas" style="background:var(--papel);border:1px solid var(--linea);border-bottom:0;border-radius:10px 10px 0 0;margin-top:14px">
     ${carpetas.map(([k,t])=>`<button class="${k===car?'activa':''}" onclick="irAMaestra('${k}')">${t}</button>`).join('')}
   </div>
-  <div style="border:1px solid var(--linea);border-top:0;border-radius:0 0 10px 10px;padding:12px">
-  ${car==='baja'?`<div class="aviso-caja info" style="margin:0 0 10px"><b>Dado de baja = anulado.</b> Son la misma cosa con dos nombres: el documento <b>entero</b> se retiró y ya no aplica. Se conserva como referencia histórica, con todas sus versiones, pero no debe usarse para trabajar.
-    <br><br><b>Obsoleto es distinto.</b> Obsoleto quiere decir <b>reemplazado</b>, y le pasa a una <b>versión</b>, no al documento: cuando sale la v2, la v1 queda obsoleta y el documento sigue vigente. Esas están en la carpeta de al lado.
-    <br><span class="sub">En la base de datos el estado del documento se guarda con el valor <span class="mono">Obsoleto</span>, por cómo se creó la tabla. Ahí «obsoleto» significa «dado de baja»; es la única parte del sistema donde la palabra se usa con ese sentido.</span></div>`:''}
-  ${car==='versiones'?'<div class="sub" style="margin-bottom:10px">Versiones <b>reemplazadas</b> por otra posterior del mismo documento. Se conservan como evidencia de qué estuvo vigente y cuándo. El documento puede seguir vigente en su versión actual.</div>':''}
+  <div style="border:1px solid var(--linea);border-top:0;border-radius:0 0 10px 10px;padding:12px;background:var(--papel)">
+  ${car==='baja'?`<div class="aviso-caja info" style="margin:0 0 10px"><b>Dado de baja = anulado.</b> El documento <b>entero</b> se retiró y ya no aplica. Se conserva como referencia histórica, con todas sus versiones, pero no debe usarse para trabajar.
+    <br><b>Obsoleto es distinto:</b> quiere decir <b>reemplazado</b> y le pasa a una <b>versión</b>, no al documento. Esas están en la carpeta de al lado.</div>`:''}
+  ${car==='versiones'?'<div class="sub" style="margin-bottom:10px">Versiones <b>reemplazadas</b> por otra posterior del mismo documento. Se conservan como evidencia de qué estuvo vigente y cuándo.</div>':''}
   <div class="barra-filtros" style="margin-bottom:0">
-    <input type="text" class="buscar" id="fQ" placeholder="${car==='versiones'?'Buscar por código, documento o descripción del cambio':'Buscar por código, título, palabra clave o responsable'}" value="${esc(F.q)}">
-    <select id="fTipo">${opciones(S.cat.tipos.map(t=>t.nombre),F.tipo,'Todos los tipos')}</select>
-    ${car!=='versiones'?(() => { const base = S.docs.filter(d => !CARPETAS[car] || d.estado === CARPETAS[car]);
-      const nI = base.filter(d => origenDe(d) === 'Interno').length, nE = base.length - nI;
-      return `<select id="fOrigen" title="Interno: lo elaboró la Facultad. Externo: lo emite otra entidad (ley, reglamento, norma ISO).">${opciones([{v:'Interno',t:`Solo internos (${nI})`},{v:'Externo',t:`Solo externos (${nE})`}],F.origen,'Internos y externos')}</select>`; })():''}
+    <input type="text" class="buscar" id="fQ" placeholder="${car==='versiones'?'Buscar por código, documento o descripción del cambio':ext?'Buscar por título, código o entidad que lo emite':'Buscar por código, título, palabra clave o responsable'}" value="${esc(F.q)}">
+    <select id="fTipo">${opciones([...new Set(docsG.map(d=>d.tipo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')),F.tipo,'Todos los tipos')}</select>
     ${PROCESO_ACTIVO&&car!=='versiones'?`<select id="fMacro" title="Tipo de proceso">${opciones(tiposProc,F.macro,'Todos los tipos de proceso')}</select>
     <select id="fProceso" title="Proceso nivel 0">${opciones(S.cat.procesos.filter(x=>!F.macro||x.tipo===F.macro).map(x=>x.etiqueta),F.proceso,'Todos los procesos nivel 0')}</select>`:''}
     ${PROGRAMA_ACTIVO&&car!=='versiones'?`<select id="fPrograma">${opciones(S.cat.programas.map(x=>x.nombre),F.programa,'Todos los programas')}</select>`:''}
   </div>
   <div class="tabla-envoltura">${car==='versiones'
     ? '<table><thead><tr><th>Código de versión</th><th>Documento</th><th>Versión</th><th>Reemplazada por</th><th>Aprobada el</th><th>Qué cambió</th><th></th></tr></thead><tbody id="tbMaestra"></tbody></table>'
-    : `<table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th><th>Origen${tip('Interno: lo elaboró la Facultad de Ingeniería. Externo: lo emite otra entidad (ley universitaria, reglamento de la universidad, norma ISO) y el SGOE solo controla qué versión se usa.', true)}</th>${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th>${REVISION_ACTIVA?'<th>Próx. revisión</th>':''}<th></th></tr></thead><tbody id="tbMaestra"></tbody></table>`}</div>
+    : `<table><thead><tr><th>Código</th><th>Documento</th><th>Tipo</th>${ext?'<th>Lo emite</th>':''}${PROCESO_ACTIVO?'<th>Proceso</th>':''}<th>Versión</th><th>Estado</th>${REVISION_ACTIVA?'<th>Próx. revisión</th>':''}<th></th></tr></thead><tbody id="tbMaestra"></tbody></table>`}</div>
   <div class="sub" id="pieMaestra" style="margin-top:8px"></div>
-  </div>`;
+  </div></div>`;
   const re = () => { pintarMaestra(); };
   $('fQ').oninput = e => { F.q=e.target.value; re(); };
-  [['fTipo','tipo'],['fOrigen','origen'],['fProceso','proceso'],['fPrograma','programa']].forEach(([id,k]) => { const el=$(id); if (el) el.onchange = e => { F[k]=e.target.value; re(); }; });
+  [['fTipo','tipo'],['fProceso','proceso'],['fPrograma','programa']].forEach(([id,k]) => { const el=$(id); if (el) el.onchange = e => { F[k]=e.target.value; re(); }; });
   if ($('fMacro')) $('fMacro').onchange = e => { F.macro=e.target.value; F.proceso=''; vMaestra(); };
   pintarMaestra();
 }
@@ -991,7 +1031,7 @@ function pintarMaestra(){
       <td><div style="font-weight:500">${esc(d.titulo)}</div><div class="sub">${esc(d.unidad||d.responsable||'')}${PROGRAMA_ACTIVO&&d.programa?' · '+esc(d.programa):''}
         ${d.distribucion==='Restringida'?' <span class="eti e-restringida">Restringida</span>':''}</div></td>
       <td>${esc(d.tipo)}</td>
-      <td>${etiOrigen(d)}${origenDe(d)==='Externo'&&d.fuente?`<div class="sub" style="margin-top:3px">${esc(d.fuente)}</div>`:''}</td>${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
+      ${grupoActual()==='externos'?`<td>${esc(d.fuente||'—')}</td>`:''}${PROCESO_ACTIVO?`<td><div>${esc(procNombre(d.proceso))}</div><div class="sub">${esc(d.macroproceso||'')}</div></td>`:''}
       <td class="mono">v${esc(ver(d.version))}</td>
       <td>${etiEstado(d.estado)}${d.solicitudEnCurso?'<div style="margin-top:3px"><span class="eti e-flujo">En actualización</span></div>':''}${S.obsAbiertas[d.codigo]?`<div class="sub" style="margin-top:3px">${S.obsAbiertas[d.codigo]} observ. abierta(s)</div>`:''}</td>
       ${REVISION_ACTIVA?`<td>${etiRevision(d)}</td>`:''}
@@ -1000,9 +1040,11 @@ function pintarMaestra(){
         <button class="btn n sm" style="color:var(--falla)" title="Solo para deshacer un error de carga. Si el documento dejó de aplicar, dale de baja." onclick="event.stopPropagation();formEliminarDocumento('${esc(d.codigo)}')">Eliminar</button>`:''}</td>
     </tr>`).join('') : `<tr><td colspan="8" class="vacio">${carpetaActual()==='baja'
       ? 'No hay documentos dados de baja.<br><span class="sub">Aquí aparecerán los documentos cuya anulación se apruebe desde la ficha, con «Solicitar anulación».</span>'
-      : 'No hay documentos con esos filtros.<br><span class="sub">Limpia el buscador o cambia el tipo de documento o el origen.</span>'}</td></tr>`;
-  const nE = lista.filter(d => origenDe(d) === 'Externo').length;
-  $('pieMaestra').textContent = `Mostrando ${lista.length} de ${S.docs.length} documentos (${lista.length - nE} interno${lista.length - nE === 1 ? '' : 's'} · ${nE} externo${nE === 1 ? '' : 's'}) · consultado el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}`;
+      : (grupoActual()==='externos' && !F.q && !F.tipo
+          ? 'Todavía no hay documentos externos.<br><span class="sub">Se cargan con <b>+ Agregar → Documento externo</b>: una ley, un reglamento de la universidad, una norma ISO.</span>'
+          : 'No hay documentos con esos filtros.<br><span class="sub">Limpia el buscador o cambia el tipo de documento.</span>')}</td></tr>`;
+  const total = S.docs.filter(d => origenDe(d) === origenDelGrupo()).length;
+  $('pieMaestra').textContent = `Mostrando ${lista.length} de ${total} documentos ${grupoActual()==='externos'?'externos':'internos'} · consultado el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}`;
 }
 /* Una fila por versión reemplazada. El clic abre la ficha del documento en su
    pestaña Versiones, que es donde está el detalle completo del cambio. */
@@ -2225,7 +2267,7 @@ const campoBorrador = (etiqueta) => campoArchivo('fBorrador', etiqueta,
   notaF('Pulsa <b>Cargar archivos</b> y elige el borrador desde tu computadora. Se guarda en la carpeta del repositorio en Drive y el sistema lo comparte solo con <b>urp.edu.pe</b>: ya no tienes que compartirlo tú. Puedes elegir <b>varios archivos a la vez</b>; el primero es el que se abre en el visor y el orden se puede cambiar. Formatos: PDF, Word, Excel, PowerPoint, imagen o ZIP. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ''),
   {req:true, completo:true, origen:'borrador'});
 
-function formDocumento(modo, codigo){
+function formDocumento(modo, codigo, opts = {}){
   const doc = codigo ? S.docs.find(d=>d.codigo===codigo) : null;
   let html = '', titulo = '', finalidad = '';
   if (modo==='Creación'){
@@ -2257,13 +2299,16 @@ function formDocumento(modo, codigo){
         notaF('Explica por qué ya no se necesita: lo reemplaza otro documento (indica cuál), cambió la norma, o el proceso dejó de existir.'), {req:true, completo:true})}</div>
       ${selectorFlujo()}`;
   } else {
-    titulo = 'Registrar documento ya aprobado';
-    finalidad = 'Sirve para la <b>carga inicial</b>: documentos aprobados <b>antes</b> de que existiera el repositorio (Política de calidad, Alcance del SGOE, Guía de coordinadores, Guía de docentes). Quedan vigentes de inmediato, sin pasar por revisión ni aprobación, porque ya fueron aprobados. La acción queda en la bitácora. Para documentos nuevos usa «+ Solicitar nuevo documento».';
-    html = `<h3 class="sec-form">Datos de la aprobación que ya existe</h3><div class="campos">
-        ${campoF('Código existente', `<input type="text" id="eCodigo" class="mono" placeholder="Vacío = lo genera el sistema">`,
-          notaF('Si el documento ya tiene un código oficial impreso, escríbelo tal cual para respetarlo. Si no tiene, déjalo vacío y el sistema lo asigna.'))}
-        ${campoF('Versión', `<input type="text" id="eVersion" value="1">`, notaF('La versión que figura en el documento aprobado, en número entero: 1, 2, 3. Si no figura ninguna, deja 1.'), {req:true})}
-        ${campoF('Fecha de aprobación', `<input type="date" id="eFecha">`, notaF('La fecha de la resolución o acta. Con ella y la frecuencia se calcula la próxima revisión.'), {req:true})}
+    const ext = opts.origen === 'Externo';
+    titulo = ext ? 'Registrar documento externo' : 'Registrar documento interno ya aprobado';
+    finalidad = ext
+      ? 'Para un documento que <b>emite otra entidad</b> y que el SGOE usa: una ley, un reglamento de la universidad, una norma ISO, una directiva del ministerio. La Facultad no lo aprueba: lo controla, es decir, registra qué versión se usa y dónde está. Queda vigente de inmediato. <b>El código y la fecha de aprobación son opcionales.</b>'
+      : 'Para documentos de la Facultad <b>que ya fueron aprobados</b>, por ejemplo antes de que existiera el repositorio (Política de calidad, Alcance del SGOE, guías). Quedan vigentes de inmediato, sin pasar por revisión ni aprobación. La acción queda en la bitácora.';
+    html = `<h3 class="sec-form">${ext?'Datos del documento externo':'Datos de la aprobación que ya existe'}</h3><div class="campos">
+        ${campoF(ext?'Código o número del documento':'Código existente', `<input type="text" id="eCodigo" class="mono" placeholder="${ext?'Opcional · vacío = el sistema asigna EXT-001':'Vacío = lo genera el sistema'}">`,
+          notaF(ext?'<b>Opcional.</b> Si la norma tiene número propio (Ley N.° 30220, ISO 21001:2018), puedes escribirlo. Si lo dejas vacío, el sistema le asigna uno de la forma EXT-001, solo para ubicarlo en el repositorio.':'Si el documento ya tiene un código oficial impreso, escríbelo tal cual para respetarlo. Si no tiene, déjalo vacío y el sistema lo asigna.'))}
+        ${campoF(ext?'Versión o edición':'Versión', `<input type="text" id="eVersion" value="1">`, notaF(ext?'La edición que usa el SGOE, en número entero. Si no figura ninguna, deja 1.':'La versión que figura en el documento aprobado, en número entero: 1, 2, 3. Si no figura ninguna, deja 1.'), {req:true})}
+        ${campoF(ext?'Fecha de publicación o aprobación':'Fecha de aprobación', `<input type="date" id="eFecha">`, notaF(ext?'<b>Opcional.</b> La fecha en que se publicó o aprobó, si se conoce.':'La fecha de la resolución o acta. Con ella y la frecuencia se calcula la próxima revisión.'), ext?{}:{req:true})}
         ${campoF('Documento de aprobación', `<input type="text" id="eDocAprob" placeholder="Ej. Resolución de Decanato N.° 123-2026">`, notaF('Número de la resolución, acta u oficio que lo aprobó.'))}
         ${campoF('Elaboró', `<input type="text" id="eElaboro">`, notaF('Quién lo redactó, si se sabe.'))}
         ${campoF('Revisó', campoVarios('eReviso', 'Ej. Ing. Patricia Vega Denegri'),
@@ -2278,8 +2323,33 @@ function formDocumento(modo, codigo){
     <div class="modal-pie"><button class="btn n" onclick="${codigo?`abrirDocumento('${esc(codigo)}')`:'cerrarModal()'}">Cancelar</button>
     <button class="btn" onclick="enviarDocumento('${modo}','${esc(codigo||'')}')">${modo==='existente'?'Registrar como vigente':'Iniciar flujo de aprobación'}</button></div>`);
   // El campo de revisores arranca con una línea vacía (o con las que ya había).
-  if (modo === 'existente') setTimeout(() => sembrarVarios('eReviso', '', 'Ej. Ing. Patricia Vega Denegri'), 0);
+  if (modo === 'existente') setTimeout(() => {
+    sembrarVarios('eReviso', '', 'Ej. Ing. Patricia Vega Denegri');
+    // El origen ya se eligió en «+ Agregar»: se fija para no cambiarlo por error.
+    if (opts.origen && $('dOrigen')){ $('dOrigen').value = opts.origen; $('dOrigen').disabled = true; }
+  }, 0);
   if (modo === 'Modificación' && doc) sugerirCambio(doc.codigo, siguienteVersion(doc.version), 'fJust');
+}
+
+/* «+ Agregar» pregunta primero QUÉ se va a cargar, porque cada cosa sigue un
+   camino distinto y equivocarse de camino era el error más común:
+     · interno nuevo        → flujo de revisión y aprobación
+     · interno ya aprobado  → carga directa, queda vigente
+     · externo              → carga directa, sin código interno ni fecha obligatoria
+     · registro             → evidencia: no tiene versiones ni pasa por el flujo
+   Solo se muestran las opciones que el rol de la persona permite. */
+function elegirQueCargar(){
+  const p = S.perfil.puede;
+  const op = [
+    p.solicitar && ['Documento interno nuevo', 'Lo elaboró la Facultad y <b>todavía no está aprobado</b>. Pasa por revisión y aprobación.', 'Procedimiento, guía o matriz nueva', "formDocumento('Creación')"],
+    p.registrarExistente && ['Documento interno ya aprobado', 'Lo elaboró la Facultad y <b>ya tiene aprobación</b>. Queda vigente de inmediato.', 'Política de calidad, Alcance del SGOE', "formDocumento('existente',null,{origen:'Interno'})"],
+    p.registrarExistente && ['Documento externo', 'Lo <b>emite otra entidad</b> y el SGOE lo usa. Código y fecha opcionales.', 'Ley Universitaria, reglamento URP, norma ISO 21001', "formDocumento('existente',null,{origen:'Externo'})"],
+    p.registrar && ['Registro o evidencia', 'Prueba de que <b>algo se hizo</b>. No tiene versiones ni pasa por aprobación.', 'Acta, lista de asistencia, informe', "formRegistro()"]
+  ].filter(Boolean);
+  if (op.length === 1) return new Function(op[0][3])();
+  modal(`<div class="modal-cab"><h2 style="flex:1">¿Qué vas a cargar?</h2><button class="cerrar" onclick="cerrarModal()">×</button></div>
+  <div class="modal-cuerpo"><div class="opciones-carga">${op.map(([t,d,ej,acc])=>`
+    <button class="opcion-carga" onclick="${acc}"><b>${t}</b><span>${d}</span><span class="sub">Ej.: ${ej}</span></button>`).join('')}</div></div>`);
 }
 
 /* Avisa cuál falta, no una lista de cuatro donde tres están llenos. Deja el
@@ -2299,8 +2369,9 @@ function faltantes(pares){
 async function enviarDocumento(modo, codigo){
   try{
     if (modo==='existente'){
+      const esExterno = $('dOrigen') && $('dOrigen').value === 'Externo';
       const falta = faltantes([['dTitulo','el título del documento'], ['dTipo','el tipo de documento'],
-        ['eVersion','la versión'], ['eFecha','la fecha de aprobación']]);
+        ['eVersion','la versión']].concat(esExterno ? [] : [['eFecha','la fecha de aprobación']]));
       if (falta){ aviso(falta, true); return; }
       const datos = Object.assign(leerCamposDocumento(), { codigo:$('eCodigo').value.trim(), version:$('eVersion').value.trim(),
         fechaAprobacion:$('eFecha').value, documentoAprobacion:$('eDocAprob').value.trim(), elaborado:$('eElaboro').value.trim(),
@@ -2426,12 +2497,15 @@ async function reenviar(id){
 }
 
 /* ---------------------------------------------------- registros/evidencias */
+const raizReg = () => $('maestraRegistros') || $('v-registros');
 async function vRegistros(force){
+  // Fuera de la Lista maestra (p. ej. tras guardar una evidencia) se vuelve a ella.
+  if (!$('maestraRegistros')){ if (force) S.registros = null; F.grupo = 'registros'; return mostrar('maestra'); }
   if (!S.registros || force){   // solo si aún no llegaron con el inicio
-    $('v-registros').innerHTML = '<div class="caja"><h3>Registros y evidencias</h3><div class="vacio">Cargando registros…</div></div>';
+    raizReg().innerHTML = '<div class="caja"><h3>Registros</h3><div class="vacio">Cargando registros…</div></div>';
     try{ S.registros = (await api('/registros')).registros; }
     catch(e){
-      $('v-registros').innerHTML = `<div class="caja"><h3>No se pudieron cargar los registros</h3>
+      raizReg().innerHTML = `<div class="caja"><h3>No se pudieron cargar los registros</h3>
         <div class="aviso-caja">${esc(e.message)}</div>
         <button class="btn" onclick="vRegistros(true)">Reintentar</button></div>`;
       return;
@@ -2441,9 +2515,8 @@ async function vRegistros(force){
   const catOpciones = [...new Set((S.cat.categoriasRegistro||[]).map(c=>c.nombre).concat(cats))].sort((a,b)=>a.localeCompare(b,'es'));
   const formatos = [...new Set(S.registros.map(r=>r.formato).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const quienes = [...new Set(S.registros.map(r=>r.registradoPor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
-  $('v-registros').innerHTML = `
-  <div class="titulo-seccion"><div><h2>Registros y evidencias${tip('Aquí se deja constancia de que un formato se usó: actas, listas de asistencia, informes. No pasan por el flujo de aprobación; se registran y se conservan el plazo indicado.', true)}</h2><p>Información documentada conservada · retención y disposición final (7.5.3)</p></div><div class="espacio"></div>
-    ${S.perfil.puede.registrar?'<button class="btn" onclick="formRegistro()">+ Registrar evidencia</button>':''}</div>
+  raizReg().innerHTML = `
+  <div class="sub" style="margin-bottom:10px">Información documentada <b>conservada</b>: actas, listas de asistencia, informes. No pasan por el flujo de aprobación; se registran y se conservan el plazo indicado (7.5.3).</div>
   ${comoSeUsa('Cómo se registra una evidencia', [
     'Ten el archivo del borrador a mano en tu computadora: lo cargarás en el paso siguiente.',
     'Escribe el <b>número propio del documento</b> con la convención de la Facultad: <span class="mono">ACTA-003-2026</span>, <span class="mono">OFICIO-045-2026-FI</span>, <span class="mono">RD-123-2026</span>, <span class="mono">MEMO-012-2026-FI</span>, <span class="mono">INF-007-2026-FI</span>. Si no tiene número, déjalo vacío y el sistema le asigna uno con la fecha.',
@@ -2990,7 +3063,7 @@ function requisitos(){
     'Categoría de registro': { antes:'Administración → Catálogos, categoría «Categoría de registro»', n:(S.cat.categoriasRegistro||[]).length,
       porque:'Agrupa las evidencias por tipo: actas, exposiciones y sustentaciones, planes de trabajo, informes…',
       ir:['catalogos','Categoría de registro'], puede:S.perfil.control, quien:'control documental',
-      que:'Permite filtrar y agrupar las evidencias en la pestaña «Registros y evidencias».' },
+      que:'Permite filtrar y agrupar las evidencias en Lista maestra → pestaña Registros.' },
     'Formato': { antes:'la Lista maestra, como documento de tipo «Formato» o «Matriz» en estado vigente', n:formatos,
       porque:'Una evidencia es un formato ya llenado; para asociarla, el formato en blanco debe estar registrado primero como documento.',
       ir:'maestra', puede:S.perfil.puede.solicitar || S.perfil.puede.registrarExistente, quien:'el responsable del proceso o control documental',
@@ -3289,7 +3362,7 @@ async function diagnostico(limpiar){
    que responde sobre el uso del repositorio y sobre información documentada.
    Acepta capturas con 📎 o pegándolas con Ctrl+V. */
 const ASIS = { mensajes: [], imagen: null, ocupado: false, ultimo: null };
-const PESTANAS = { tablero:'Tablero', maestra:'Lista maestra', flujo:'Flujo documental', registros:'Registros y evidencias', admin:'Administración' };
+const PESTANAS = { tablero:'Tablero', maestra:'Lista maestra', flujo:'Flujo documental', registros:'Lista maestra · Registros', admin:'Administración' };
 
 function mdSimple(t){
   let h = esc(t);
