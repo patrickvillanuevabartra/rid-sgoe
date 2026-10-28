@@ -284,6 +284,7 @@ dl.meta dd{margin:0;word-break:break-word}
 .vistas button.activa{background:var(--brand);border-color:var(--brand);color:#fff}
 .plegable>summary::-webkit-details-marker{display:none}
 .plegable>summary::before{content:'▸';color:var(--brand);font-size:12px}
+.ayuda-plegable{border-left:3px solid var(--brand);border-radius:0 10px 10px 0}
 .plegable[open]>summary::before{content:'▾'}
 .plegable>summary:hover{color:var(--brand-oscuro)}
 .plegable-cuerpo{padding:0 16px 14px}
@@ -480,6 +481,13 @@ function comoSeUsa(titulo, pasos){
 }
 
 /* Bloque plegable: mantiene el tablero limpio sin esconder la información */
+/* La misma ayuda de comoSeUsa(), pero plegada: se ve solo el título y se abre
+   con un clic. Para no ocupar media pantalla con instrucciones que la persona
+   ya leyó la primera vez. */
+function comoSeUsaPlegable(titulo, pasos){
+  return `<details class="plegable ayuda-plegable"><summary>${esc(titulo)} <span class="sub" style="font-weight:400">· clic para ver</span></summary>
+    <div class="comose" style="border:0;margin:0;border-radius:0 0 10px 10px"><ol>${pasos.map(x=>`<li>${x}</li>`).join('')}</ol></div></details>`;
+}
 function desplegable(titulo, contenido, etiqueta, ok){
   return `<details class="plegable"><summary>${esc(titulo)}
     ${etiqueta?`<span class="eti ${ok?'e-vigente':'e-observada'}">${esc(etiqueta)}</span>`:''}</summary>
@@ -991,7 +999,7 @@ function vMaestra(){
   <div class="sub" style="margin-bottom:10px">${ext
     ? 'Documentos <b>externos</b>: los emite otra entidad —una ley, un reglamento de la universidad, una norma ISO— y el SGOE solo controla qué versión se usa. El código y la fecha de aprobación son opcionales.'
     : 'Documentos <b>internos</b>: los elaboró la Facultad de Ingeniería —procedimientos, guías, manuales, matrices— y llevan código del SGOE.'}</div>
-  ${comoSeUsa('Cómo se usa esta pestaña', [
+  ${comoSeUsaPlegable('Cómo se usa esta pestaña', [
     '<b>Tres carpetas.</b> <b>Vigentes:</b> los documentos oficiales de hoy. <b>Dados de baja:</b> el documento entero se retiró y ya no aplica — «dado de baja» y «anulado» son lo mismo. <b>Versiones obsoletas:</b> versiones <b>reemplazadas</b> de documentos que siguen vigentes, como la v1 de un documento que hoy va en v2.',
     '<b>Para leer un documento:</b> haz clic en su fila. Se abre la ficha con el archivo, sus versiones y sus observaciones.',
     puedeAgregar ? '<b>Para cargar algo nuevo:</b> botón <b>+ Agregar</b>, arriba a la derecha. Te pregunta primero qué vas a cargar —interno, externo o registro— y te lleva al formulario que corresponde.' : '',
@@ -2517,7 +2525,7 @@ async function vRegistros(force){
   const quienes = [...new Set(S.registros.map(r=>r.registradoPor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   raizReg().innerHTML = `
   <div class="sub" style="margin-bottom:10px">Información documentada <b>conservada</b>: actas, listas de asistencia, informes. No pasan por el flujo de aprobación; se registran y se conservan el plazo indicado (7.5.3).</div>
-  ${comoSeUsa('Cómo se registra una evidencia', [
+  ${comoSeUsaPlegable('Cómo se registra una evidencia', [
     'Ten el archivo del borrador a mano en tu computadora: lo cargarás en el paso siguiente.',
     'Escribe el <b>número propio del documento</b> con la convención de la Facultad: <span class="mono">ACTA-003-2026</span>, <span class="mono">OFICIO-045-2026-FI</span>, <span class="mono">RD-123-2026</span>, <span class="mono">MEMO-012-2026-FI</span>, <span class="mono">INF-007-2026-FI</span>. Si no tiene número, déjalo vacío y el sistema le asigna uno con la fecha.',
     'La <b>fecha de la evidencia</b> (el día del acta o de la actividad) es obligatoria: es la que ordena la lista.',
