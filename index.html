@@ -422,6 +422,9 @@ const PROGRAMA_ACTIVO = false;
    apaga la columna, la fila de la ficha, las alertas del tablero y el campo
    editable. El dato de cada documento se conserva intacto. */
 const REVISION_ACTIVA = false;
+// Fila «Registro» de la ficha (quién lo cargó y cuándo). Oculta por pedido;
+// el dato sigue guardado y en la bitácora. Poner true para volver a mostrarla.
+const REGISTRO_VISIBLE = false;
 
 /* A quién escribe la persona que no tiene acceso todavía. */
 const CORREO_ACCESO = 'patrick.villanueva@urp.edu.pe';
@@ -1128,7 +1131,7 @@ function pintarFicha(pestana){
       ${REVISION_ACTIVA?`<dt>Revisión</dt><dd>cada ${esc(d.frecuencia||'—')} meses · próxima ${etiRevision(d)}</dd>`:''}
       <dt>Distribución</dt><dd>${esc(d.distribucion)}</dd>
       <dt>Medio</dt><dd>${esc(d.medio||'Digital')}</dd>
-      ${reg?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
+      ${reg&&REGISTRO_VISIBLE?`<dt>Registro</dt><dd class="sub">${esc(d.registradoPor)} · ${fechaCorta(d.fechaRegistro)} · actualizado ${fechaCorta(d.actualizado)}</dd>`:''}
     </dl>`;
   if (pestana==='versiones') cuerpo = (reg ? avisoCambioTabla(d) + avisoVersionesFaltantes(d, versiones) + notaActualizarVersion(d) : '')
     + (versiones.length ? `<div class="linea-tiempo">${versiones.map(v=>`
