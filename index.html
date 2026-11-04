@@ -418,7 +418,7 @@ body.con-modal .asis-boton{display:none}
 const CFG = window.RIID_CONFIG;
 /* Versión mínima del Apps Script (Codigo.gs) que necesita esta página.
    Si el publicado es más antiguo, se avisa al administrador cómo actualizarlo. */
-const BACKEND_ESPERADO = '2026-10-28a';
+const BACKEND_ESPERADO = '2026-11-03a';
 const PASOS_PUBLICAR = 'En script.google.com abre el proyecto del RID-SGOE, pega el Codigo.gs nuevo, guarda y ve a <b>Implementar → Administrar implementaciones → ✏️ (lápiz) → Versión: «Nueva versión» → Implementar</b>. La URL no cambia, así que no hay que tocar el Worker. Guardar el código no basta: Google sigue ejecutando la versión implementada hasta que publicas una nueva.';
 /* Proceso deshabilitado hasta nuevo aviso. Poniendo esto en true vuelven a
    aparecer el campo del formulario, la columna de la lista maestra, sus dos
@@ -2708,15 +2708,15 @@ function formRegistro(modelo){
     <div class="campo completo${modelo.formato&&!modelo.codigoFormato?'':' oculto'}" id="gOtroCampo"><label class="req">Nombre del registro</label><input type="text" id="gOtro" value="${modelo.codigoFormato?'':esc(modelo.formato||'')}" placeholder="Ej. Acta de reunión de la Comisión de Calidad">
       ${notaF('Nombre claro de lo que se está registrando.')}</div>
     ${campoF('Programa', `<select id="gPrograma">${opciones(S.cat.programas.map(x=>x.nombre),modelo.programa||'','Seleccione')}</select>`, origenLista('Programa'), {req:true})}
-    ${campoF('Periodo', `<select id="gPeriodo">${opciones(S.cat.periodos.map(x=>x.nombre),modelo.periodo||'','Seleccione')}</select>`, origenLista('Periodo'), {req:true})}
+    ${campoF('Periodo', `<select id="gPeriodo">${opciones(S.cat.periodos.map(x=>x.nombre),modelo.periodo||'','Sin periodo')}</select>`, origenLista('Periodo'))}
     ${campoF('Número del documento', `<input type="text" id="gNumero" class="mono" placeholder="Ej. ACTA-003-2026 · OFICIO-045-2026-FI · RD-123-2026">`,
       notaF('<b>El número que ya trae el documento</b>, tal como figura en él: si el acta dice «Acta N.° 3 de 2026», escribe <span class="mono">ACTA-003-2026</span>. Así el repositorio y el papel se llaman igual, sin dos numeraciones para lo mismo.<br>Si el documento <b>no tiene número propio</b> (una lista de asistencia, un comunicado), déjalo vacío: el sistema le asignará uno con la fecha.' + `<div class="convencion"><b>Convención sugerida</b><div><span class="mono">ACTA-003-2026</span> acta de sesión N.° 3 del 2026</div><div><span class="mono">OFICIO-045-2026-FI</span> oficio N.° 45 de la Facultad</div><div><span class="mono">RD-123-2026</span> Resolución de Decanato N.° 123</div><div><span class="mono">MEMO-012-2026-FI</span> memorando N.° 12</div><div><span class="mono">INF-007-2026-FI</span> informe N.° 7</div><div class="sub">Tres dígitos para el correlativo y el año completo: así se ordenan bien y se leen igual que en el papel.</div></div>`), {completo:true})}
     ${campoF('Fecha de la evidencia', `<input type="date" id="gFecha" max="${S.hoy}">`,
       notaF('<b>La fecha del hecho</b>, no la de hoy: el día del acta, de la sustentación o de la capacitación. Es la que ordena la lista, así que un acta del 9 de setiembre registrada hoy igual aparece antes que la del 16.') +
       (fechaEvidenciaLista() ? '' : notaF('⚠ Todavía no se puede guardar: falta crear la columna <b>«Fecha de la evidencia»</b> en la tabla RIID Registros de QuintaDB.')),
       {req:fechaEvidenciaLista(), completo:false})}
-    ${campoF('Descripción', `<textarea id="gDesc" placeholder="Qué contiene la evidencia">${esc(modelo.descripcion||'')}</textarea>`,
-      notaF('Qué contiene <b>esta</b> evidencia en particular. No repitas lo que ya dicen el formato, el programa y el periodo: escribe lo que la distingue de las demás. Ej.: «Acta de la 3.ª sesión: se aprueba el alcance del SGOE y se asignan responsables de los nueve procesos; 7 asistentes». Si dos descripciones son idénticas, no se podrá saber cuál evidencia es cuál al buscar.'), {req:true, completo:true})}
+    ${campoF('Descripción', `<textarea id="gDesc" rows="2" placeholder="Opcional">${esc(modelo.descripcion||'')}</textarea>`,
+      notaF('<b>Opcional.</b> Una línea que distinga esta evidencia de las demás, si hace falta. Ej.: «3.ª sesión, 7 asistentes».'), {completo:true})}
     ${campoArchivo('gEnlace', 'Archivo de la evidencia',
       notaF('Pulsa <b>Cargar archivos</b> y elige el acta, la lista de asistencia y lo que acompañe a la evidencia: puedes seleccionar varios de una vez. Máximo 25 MB por archivo.<br>' + NOTA_PESADO + ' Se guarda en Drive compartido solo con <b>urp.edu.pe</b>, así que sirve también para evidencias con datos de estudiantes.'), {req:true, completo:true, origen:'evidencia'})}
     ${campoF('Retención (años)', `<input type="number" id="gRet" min="1" max="50" value="${esc(modelo.retencion||'5')}">`,
