@@ -2711,6 +2711,7 @@ function formRegistro(modelo){
     ${campoF('Periodo', `<select id="gPeriodo">${opciones(S.cat.periodos.map(x=>x.nombre),modelo.periodo||'','Sin periodo')}</select>`, origenLista('Periodo'))}
     ${campoF('Número del documento', `<input type="text" id="gNumero" class="mono" placeholder="Ej. ACTA-003-2026 · OFICIO-045-2026-FI · RD-123-2026">`,
       notaF('<b>El número que ya trae el documento</b>, tal como figura en él: si el acta dice «Acta N.° 3 de 2026», escribe <span class="mono">ACTA-003-2026</span>. Así el repositorio y el papel se llaman igual, sin dos numeraciones para lo mismo.<br>Si el documento <b>no tiene número propio</b> (una lista de asistencia, un comunicado), déjalo vacío: el sistema le asignará el siguiente correlativo del año, por ejemplo <span class="mono">REG-004-2026</span>. El correlativo sigue de un día a otro y solo vuelve a 001 al cambiar de año.' + `<div class="convencion"><b>Convención sugerida</b><div><span class="mono">ACTA-003-2026</span> acta de sesión N.° 3 del 2026</div><div><span class="mono">OFICIO-045-2026-FI</span> oficio N.° 45 de la Facultad</div><div><span class="mono">RD-123-2026</span> Resolución de Decanato N.° 123</div><div><span class="mono">MEMO-012-2026-FI</span> memorando N.° 12</div><div><span class="mono">INF-007-2026-FI</span> informe N.° 7</div><div class="sub">Tres dígitos para el correlativo y el año completo: así se ordenan bien y se leen igual que en el papel.</div></div>`), {completo:true})}
+    ${typeof URP!=='undefined' ? `<div class="completo urp-guia" style="margin:-2px 0 4px">${URP.img('urp-mini')}<div class="urp-cuerpo"><div class="urp-globo" style="margin:0;font-size:14px">¿No tiene número propio? Déjalo vacío y le pongo el <b>siguiente del año</b>: <span class="mono">REG-001-2026</span>, <span class="mono">REG-002-2026</span>… El tipo de evidencia lo dice la <b>categoría</b>.</div></div></div>` : ''}
     ${campoF('Fecha de la evidencia', `<input type="date" id="gFecha" max="${S.hoy}">`,
       notaF('<b>La fecha del hecho</b>, no la de hoy: el día del acta, de la sustentación o de la capacitación. Es la que ordena la lista, así que un acta del 9 de setiembre registrada hoy igual aparece antes que la del 16.') +
       (fechaEvidenciaLista() ? '' : notaF('⚠ Todavía no se puede guardar: falta crear la columna <b>«Fecha de la evidencia»</b> en la tabla RIID Registros de QuintaDB.')),
@@ -2745,6 +2746,8 @@ async function guardarRegistro(){
       r = await api('/registro', cuerpo);
     }
     aviso(r.aviso || ('Evidencia registrada: '+r.id), !!r.aviso);
+    // Urpito confirma el número que quedó, que es lo que la persona necesita anotar.
+    if (!r.aviso && typeof URP !== 'undefined') URP.festejo('¡Evidencia registrada!', 'Quedó con el número <b>' + esc(r.id) + '</b>.');
     cerrarModal(); S.totalReg++; vRegistros(true);
   }catch(e){ aviso(e.message, true); }
 }
@@ -3624,7 +3627,7 @@ setInterval(() => { if (S.cred) renovarSesion(); }, 40*60*1000);   // el token d
   #urp_festejo .urp-globo:before{left:auto;right:-9px;border-right:0;border-left:8px solid #0fa968}
   #urp_festejo .urp-globo:after{left:auto;right:-7px;border-right:0;border-left:7px solid #fff}
   #urp_festejo img{width:120px}
-  details.ayuda > summary .urp-ava{width:26px;height:26px;margin-right:6px}
+  details.ayuda > summary .urp-ava, details.ayuda-plegable > summary .urp-ava{width:26px;height:26px;margin-right:6px}
   @media (max-width:640px){ .urp-guia .urp-img{width:72px} #urp_bienvenida img.urp-cuerpo-img{width:84px} #urp_bienvenida .urp-globo{max-width:230px;font-size:14.5px} }
   @keyframes urpIn{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
   body.sin-urpito .urp-img, body.sin-urpito .urp-mini, body.sin-urpito .urp-login, body.sin-urpito .urp-ava{display:none !important}
@@ -3672,7 +3675,7 @@ setInterval(() => { if (S.cred) renovarSesion(); }, 40*60*1000);   // el token d
   }
   // 3) Notas «¿Cómo funciona…?»: Urpito en lugar del foco 💡
   function notas(){
-    document.querySelectorAll('details.ayuda > summary').forEach(s=>{
+    document.querySelectorAll('details.ayuda > summary, details.ayuda-plegable > summary').forEach(s=>{
       if(s.dataset.urp) return; s.dataset.urp='1';
       s.innerHTML = s.innerHTML.replace(/^\s*💡\s*/, '');
       s.insertAdjacentHTML('afterbegin', cara());
