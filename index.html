@@ -1873,6 +1873,32 @@ FORMATOS['FI-GCA-MT-002'] = {
     2: 'Actualización integral de la matriz FODA con los factores registrados en el sistema del SGOE: se incorporan nuevos factores, se reformulan otros y se reclasifican D11 como F10, A5 como D12 y F7 como O16. Se elimina A14 por duplicar a A7; por eso la numeración de las amenazas pasa de A13 a A15.'
   }
 };
+/* Matriz de Partes Interesadas: mismo tipo de documento que la FODA (PDF con
+   carátula), pero en A4 horizontal y con una tabla de una fila por parte
+   interesada. Se genera tal como está en QuintaDB, que es la versión vigente
+   de trabajo. Los «- » dentro de un campo se muestran como viñetas. */
+FORMATOS['FI-GCA-MT-001'] = {
+  tipo: 'foda',            // mismo generador de PDF con carátula
+  tabla: 'Matriz de Partes Interesadas',
+  entidad: 'dcLdFdTmjog4k3mfBcPGKk',
+  titulo: 'MATRIZ DE PARTES INTERESADAS',
+  horizontal: true,
+  seccion: 'Matriz de partes interesadas',
+  orden: 'Parte interesada',
+  columnas: [
+    ['Parte interesada', 'Parte interesada', 32, true],
+    ['Descripción o rol', 'Descripción o rol', 42],
+    ['Requisitos principales (necesidades)', 'Necesidades', 62],
+    ['Expectativas', 'Expectativas', 52],
+    ['Periodicidad de seguimiento', 'Periodicidad', 20],
+    ['Mecanismo de seguimiento ', 'Mecanismo de seguimiento', 30],
+    ['Responsabe seguimiento', 'Responsable del seguimiento', 31]
+  ],
+  elaborado: 'Unidad de Calidad y Acreditación',
+  sugerenciaCambio: {
+    2: 'Actualización integral de la matriz con la información registrada en el sistema del SGOE: se amplían las partes interesadas de 9 a 18; se separan necesidades y expectativas; se agrega la descripción del rol de cada parte interesada; se asigna una oficina responsable del seguimiento a cada una; y las necesidades y expectativas reemplazan a la columna de requisitos institucionales pertinentes. Las «Asociaciones y gremios del sector de Ingeniería» se consideran a través del Colegio de Ingenieros del Perú.'
+  }
+};
 const formatoDe = codigo => FORMATOS[String(codigo||'').trim().toUpperCase()] || null;
 /* Pre-llena «Qué cambió» con el texto sugerido para esa versión, si lo hay y
    el campo está vacío. Va al control de cambios de la carátula. */
@@ -2054,15 +2080,28 @@ async function generarFODA(codigo, version, fecha){
   cargando(true);
   try{
     await cargarJsPDF();
-    const letras = Object.keys(F.cuadrantes);
-    const tablas = await Promise.all(letras.map(k => leerTablaQuinta(F.cuadrantes[k].entidad)));
-    const fac = {}; letras.forEach((k, i) => fac[k] = factoresFODA(tablas[i], k, F.cuadrantes[k].campo));
-    const total = letras.reduce((a, k) => a + fac[k].length, 0);
-    if (!total) throw new Error('Las tablas de la Matriz FODA están vacías: no hay nada que poner en el documento.');
+    const esFoda = !!F.cuadrantes;
+    let fac = {}, filasTabla = [], total = 0;
+    if (esFoda){
+      const letras = Object.keys(F.cuadrantes);
+      const tablas = await Promise.all(letras.map(k => leerTablaQuinta(F.cuadrantes[k].entidad)));
+      letras.forEach((k, i) => fac[k] = factoresFODA(tablas[i], k, F.cuadrantes[k].campo));
+      total = letras.reduce((a, k) => a + fac[k].length, 0);
+    } else {
+      const regs = (await leerTablaQuinta(F.entidad)).map(r => r.values || {});
+      regs.sort((a, b) => String(a[F.orden] || '').localeCompare(String(b[F.orden] || ''), 'es'));
+      // «- uno - dos» → una viñeta por línea
+      const celda = v => { const t = pdfTxt(textoCelda(v)).replace(/\s+/g, ' ').trim();
+        const partes = t.split(/(?:^|\s)-\s+/).map(x => x.trim()).filter(Boolean);
+        return partes.length > 1 ? partes.map(x => '• ' + x).join('\n') : t.replace(/^-\s+/, ''); };
+      filasTabla = regs.map(v => F.columnas.map(([campo]) => celda(v[campo])));
+      total = filasTabla.length;
+    }
+    if (!total) throw new Error(`${esFoda ? 'Las tablas' : 'La tabla'} de «${F.tabla}» ${esFoda ? 'están vacías' : 'está vacía'}: no hay nada que poner en el documento.`);
     const car = datosCaratula(codigo, num);
 
-    const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
-    const W = 210, M = 14, ancho = W - 2 * M;
+    const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation: F.horizontal ? 'landscape' : 'portrait' });
+    const W = F.horizontal ? 297 : 210, H = F.horizontal ? 210 : 297, M = 14, ancho = W - 2 * M;
     let logo = null;
     try{ const b = await (await fetch('img/logo-urp.jpg')).blob(); logo = 'data:image/jpeg;base64,' + await leerBase64(b); }catch(e){}
     const gris = [217, 217, 217], negro = [0, 0, 0];
@@ -2085,10 +2124,10 @@ async function generarFODA(codigo, version, fecha){
     };
     const pie = () => {
       pdf.setFont('helvetica', 'italic'); pdf.setFontSize(7); pdf.setTextColor(60);
-      pdf.line(M, 284, W - M, 284);
-      pdf.text('“Toda copia de este documento, sea del repositorio de documentos o del documento original en físico es considerada “copia no controlada”.', W / 2, 288, { align:'center', maxWidth:ancho });
+      pdf.line(M, H - 13, W - M, H - 13);
+      pdf.text('“Toda copia de este documento, sea del repositorio de documentos o del documento original en físico es considerada “copia no controlada”.', W / 2, H - 9, { align:'center', maxWidth:ancho });
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5);
-      pdf.text(`Generado desde el aplicativo del SGOE (tablas ${F.tabla}) el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`, W / 2, 292, { align:'center' });
+      pdf.text(`Generado desde el aplicativo del SGOE (${esFoda ? 'tablas' : 'tabla'} ${F.tabla}) el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`, W / 2, H - 5, { align:'center' });
       pdf.setTextColor(0);
     };
     const tabla = (o) => pdf.autoTable(Object.assign({ margin:{ top:38, left:M, right:M, bottom:18 }, theme:'grid',
@@ -2097,17 +2136,19 @@ async function generarFODA(codigo, version, fecha){
       didDrawPage:() => { encabezado(); pie(); } }, o));
 
     // Hoja 1: carátula
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.text(F.titulo, W / 2, 80, { align:'center' });
-    pdf.setFontSize(11); pdf.text('CONTROL DE EMISIÓN', W / 2, 120, { align:'center' });
-    tabla({ startY:123, head:[['Elaborado por:', 'Revisado por:', 'Aprobado por:']],
+    const yT = F.horizontal ? 62 : 80, yE = F.horizontal ? 85 : 120;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.text(F.titulo, W / 2, yT, { align:'center' });
+    pdf.setFontSize(11); pdf.text('CONTROL DE EMISIÓN', W / 2, yE, { align:'center' });
+    tabla({ startY:yE + 3, head:[['Elaborado por:', 'Revisado por:', 'Aprobado por:']],
       body:[[car.elaboro || F.elaborado, car.reviso, car.aprobo]], bodyStyles:{ minCellHeight:32, halign:'center', valign:'middle' } });
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
     const yc = pdf.lastAutoTable.finalY + 14; pdf.text('CONTROL DE CAMBIOS', W / 2, yc, { align:'center' });
     tabla({ startY:yc + 3, head:[['Versión', 'Sección del documento', 'Descripción del cambio']],
-      body:car.historial.map(h => [dosDigitos(h.version), h.version === 1 ? '---' : 'Matriz FODA', h.descripcion]),
+      body:car.historial.map(h => [dosDigitos(h.version), h.version === 1 ? '---' : (F.seccion || 'Matriz FODA'), h.descripcion]),
       columnStyles:{ 0:{ halign:'center', cellWidth:22 }, 1:{ halign:'center', cellWidth:45 } } });
 
     // Cuadrantes: F | O en una sección y D | A en otra, emparejados fila a fila
+    if (esFoda){
     const par = (a, b) => { const n = Math.max(fac[a].length, fac[b].length);
       return Array.from({ length:n }, (_, i) => [fac[a][i] || '', fac[b][i] || '']); };
     [['F', 'O'], ['D', 'A']].forEach(([a, b], i) => {
@@ -2116,6 +2157,16 @@ async function generarFODA(codigo, version, fecha){
       tabla({ startY:46, head:[[F.cuadrantes[a].nombre, F.cuadrantes[b].nombre]], body:par(a, b),
         columnStyles:{ 0:{ cellWidth:ancho / 2 }, 1:{ cellWidth:ancho / 2 } }, rowPageBreak:'avoid' });
     });
+    } else {
+      // Una tabla: una fila por registro, con los anchos de la configuración
+      pdf.addPage();
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text(F.titulo, M, 43);
+      const suma = F.columnas.reduce((a, c) => a + c[2], 0);
+      const cs = {}; F.columnas.forEach((c, i) => cs[i] = Object.assign({ cellWidth: c[2] * ancho / suma }, c[3] ? { fontStyle:'bold' } : {}));
+      tabla({ startY:46, head:[F.columnas.map(c => c[1])], body:filasTabla, columnStyles:cs,
+        styles:{ font:'helvetica', fontSize:8, cellPadding:1.5, lineColor:negro, lineWidth:0.2, textColor:negro, valign:'top', overflow:'linebreak' },
+        rowPageBreak:'avoid' });
+    }
 
     // Numeración de hojas
     const tot = pdf.getNumberOfPages();
@@ -2123,7 +2174,7 @@ async function generarFODA(codigo, version, fecha){
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(`Hoja: ${p} de ${tot}`, W - M - 2, 30.3, { align:'right' }); }
 
     const blob = pdf.output('blob');
-    const nombre = `${codigo}_Matriz_FODA_v${dosDigitos(num)}.pdf`;
+    const nombre = `${codigo}_${F.titulo.toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase()).replace(/\s+/g, '_').replace('Foda', 'FODA')}_v${dosDigitos(num)}.pdf`;
     return { blob, nombre, filas:total };
   } finally { cargando(false); }
 }
