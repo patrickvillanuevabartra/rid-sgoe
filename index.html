@@ -1899,6 +1899,57 @@ FORMATOS['FI-GCA-MT-001'] = {
     2: 'Actualización integral de la matriz con la información registrada en el sistema del SGOE: se amplían las partes interesadas de 9 a 18; se separan necesidades y expectativas; se agrega la descripción del rol de cada parte interesada; se asigna una oficina responsable del seguimiento a cada una; y las necesidades y expectativas reemplazan a la columna de requisitos institucionales pertinentes. Las «Asociaciones y gremios del sector de Ingeniería» se consideran a través del Colegio de Ingenieros del Perú.'
   }
 };
+/* Plan de Acción y Seguimiento de Objetivos: Excel como la Matriz de
+   Comunicaciones, pero su contenido sale de CUATRO tablas enlazadas. Una fila
+   por indicador de los objetivos vigentes del periodo:
+   · Objetivos → número y nombre del objetivo, y la oficina si el indicador no trae la suya.
+   · Indicadores → actividad, indicador, meta, plazo, línea base y reprogramación.
+   · Hitos → meta en número y unidad, para medir el resultado.
+   · Reportes de avance → el ÚLTIMO reporte de cada hito da el estado, la fecha
+     real, el resultado, la evidencia y el análisis (las celdas crema).
+   Los objetivos «Despriorizada» y los de otros periodos no entran. */
+FORMATOS['FI-GCA-MT-008'] = {
+  tipo: 'plan',
+  tabla: 'Objetivos de calidad, sus indicadores, hitos y reportes de avance',
+  entidades: { objetivos:'cUgSoAkmncWRK2iHdcKYCp', indicadores:'c9lw5JmGvdOQurAmokgmkq',
+               hitos:'dcTSkMWQ9dUjTwW6ldJSkf', reportes:'ddIxBcLdHhii7dUmo6isCf' },
+  titulo: 'MATRIZ DE PLAN DE ACCIÓN Y SEGUIMIENTO DE OBJETIVOS',
+  hoja: 'Plan de acción y seguimiento',
+  // [dato, título, columna inicial, columna final, alineación, ¿se actualiza en cada seguimiento?]
+  columnas: [
+    ['n', 'N°', 1, 3, 'center'],
+    ['objetivo', 'Objetivo', 4, 7],
+    ['actividad', 'Actividad', 8, 11],
+    ['indicador', 'Indicador', 12, 15],
+    ['meta', 'Meta', 16, 19, 'center'],
+    ['fecha', 'Fecha de cumplimiento', 20, 22, 'center'],
+    ['responsable', 'Responsable', 23, 25],
+    ['estado', 'Estado de la actividad', 26, 28, 'center', true],
+    ['freal', 'Fecha real de ejecución', 29, 31, 'center', true],
+    ['lb', 'Valor de referencia (línea base)', 32, 34],
+    ['resultado', 'Resultado del indicador', 35, 37, 'left', true],
+    ['cumplimiento', 'Cumplimiento de la meta', 38, 41, 'left', true],
+    ['evidencia', 'Evidencia', 42, 44],
+    ['analisis', 'Análisis de la desviación y acción', 45, 48],
+    ['reprog', 'Reprogramación y sustento', 49, 57]
+  ],
+  // anchos de la plantilla aprobada (v02), columnas A a BE
+  anchos: [3.71,13,13,13,13,13,13,8.29,13,13,3.71,6.14,13,13,13,3.71,13,13,13,6.14,13,13,3.71,13,10.29,3.71,13,10.43,6,13,13,11,13,13,10.57,13,13,3.71,13,13,13,14.43,13,13,13,13,13,13,3.71,13,13,13,13,13,13,13,13],
+  totalColumnas: 57,
+  bloqueDerecha: 49,          // código, fecha, versión y página van de AW a BE
+  altoFila: 48, fuenteDatos: 9, fuenteTitulos: 14, altoTitulos: 60.75,
+  relleno: 'FFF2F4F3', rellenoSeguimiento: 'FFFFF9E3',
+  nota: 'Las celdas de fondo crema se actualizan en cada seguimiento. El presente documento registra la ejecución y el cierre de las actividades definidas en el FI-GCA-MT-003 y constituye la entrada de desempeño de los objetivos de calidad para la revisión por la dirección, conforme al numeral 9.3.2 de la norma ISO 21001:2018.',
+  // Orden de los objetivos en el documento (el N°), por el tema con que empieza
+  // su nombre. Un tema que no esté aquí va al final, por su código.
+  ordenObjetivos: ['Pertinencia', 'Ética', 'Eficiencia', 'Responsabilidad Social', 'Escucha', 'Madurez'],
+  // Orden de las filas dentro de cada objetivo, como en la v02 (por id del indicador)
+  ordenFilas: ['bguX0LFhfmWRT_gIeJjSot','caWRXMsCjpWRZcNXtdM8oI','dcLmkQW6DdPikkW49lW7a7','a8zSo7WO9hpzFdUH3cHSou',
+    'cZqCo4W5LfxkiaggnzASoO','ddVSogqwrcMikbWOr8wsqb','ddO8k2dWLdNONcTeGermo4','byasxcH8jlq4xdNCkMW71y'],
+  sugerenciaCambio: {
+    3: 'El documento se genera desde el sistema del SGOE (objetivos, indicadores, hitos y reportes de avance en QuintaDB). Se actualiza el seguimiento: las actividades de Eficiencia y Transformación Digital (2 procesos misionales: M01.05 y M01.06) y de Madurez y Mejora Continua (sistema de control con alertas para los 11 indicadores) pasan a Ejecutada al 23/10/2026, con la meta cumplida. La meta de Desempeño docente evaluado por los estudiantes pasa de 17 a 17.5, porque la línea base es 17.38 y una meta de 17 nacería cumplida. La columna Responsable consigna la unidad responsable de cada actividad.'
+  }
+};
 const formatoDe = codigo => FORMATOS[String(codigo||'').trim().toUpperCase()] || null;
 /* Pre-llena «Qué cambió» con el texto sugerido para esa versión, si lo hay y
    el campo está vacío. Va al control de cambios de la carátula. */
@@ -1908,7 +1959,9 @@ function sugerirCambio(codigo, version, idCampo){
   if (t && el && !el.value.trim()) el.value = t;
 }
 /* Tablas de QuintaDB de las que sale un formato (una o varias). */
-const entidadesDe = F => F.cuadrantes ? Object.values(F.cuadrantes).map(c => c.entidad) : [F.entidad];
+const entidadesDe = F => F.cuadrantes ? Object.values(F.cuadrantes).map(c => c.entidad)
+  : F.entidades ? Object.values(F.entidades) : [F.entidad];
+const variasTablas = F => !!(F.cuadrantes || F.entidades);
 
 function cargarExcelJS(){
   if (window.ExcelJS) return Promise.resolve();
@@ -1951,6 +2004,94 @@ function textoCelda(v){
 
 const dosDigitos = v => String(parseInt(v, 10) || 1).padStart(2, '0');
 
+/* --------- Plan de Acción: arma las filas a partir de las cuatro tablas */
+// Texto con formato de QuintaDB (negritas, saltos, listas) → texto plano
+function textoPlano(t){
+  const s = String(t == null ? '' : t)
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|li|div|tr|h\d)>/gi, '\n').replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '');
+  const ta = document.createElement('textarea'); ta.innerHTML = s;
+  return ta.value.replace(/ /g, ' ').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+// Fecha de QuintaDB («2026-12-31», «31-12-2026», «31/12/2026») → AAAA-MM-DD
+function fechaISO(v){
+  const s = String(v == null ? '' : v).trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/.exec(s);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return fechaLima(s);
+}
+const dmy = iso => iso ? iso.split('-').reverse().join('/') : '';
+const MESES3 = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const mesAnio = iso => iso ? `${MESES3[parseInt(iso.slice(5,7),10)-1]}-${iso.slice(2,4)}` : '';
+const numTxt = n => (Math.round(n * 10) / 10).toLocaleString('es-PE', { maximumFractionDigits:1 });
+
+async function filasPlan(F){
+  const E = F.entidades;
+  const [regO, regI, regH, regR] = await Promise.all([E.objetivos, E.indicadores, E.hitos, E.reportes].map(leerTablaQuinta));
+  const v = r => r.values || {};
+  // Objetivos vigentes: los del periodo más reciente que no estén despriorizados
+  const vivos = regO.filter(r => !/despriorizad/i.test(v(r)['Condición'] || '') && /^\d{4}$/.test(String(v(r)['Periodo (texto)'] || '').trim()));
+  const periodo = vivos.map(r => String(v(r)['Periodo (texto)']).trim()).sort().pop();
+  const obj = {}; vivos.filter(r => String(v(r)['Periodo (texto)']).trim() === periodo).forEach(r => obj[r.id] = v(r));
+  if (!Object.keys(obj).length) throw new Error('No hay objetivos vigentes en la tabla de objetivos de calidad.');
+  const tema = o => String(o['Objetivo del sistema de gestión de la calidad'] || '').split(':')[0].trim();
+  const posObj = o => { const t = tema(o).toLowerCase(); const i = (F.ordenObjetivos || []).findIndex(p => t.startsWith(p.toLowerCase())); return i < 0 ? 99 : i; };
+  const idsObj = Object.keys(obj).sort((a, b) => posObj(obj[a]) - posObj(obj[b]) || String(obj[a]['Código']||'').localeCompare(String(obj[b]['Código']||'')));
+  const numero = {}; idsObj.forEach((id, i) => numero[id] = i + 1);
+
+  const hoy = S.hoy || new Date().toISOString().slice(0, 10);
+  const filas = regI.filter(r => obj[v(r)['Objetivo ref']]).map(r => {
+    const ind = v(r), o = obj[ind['Objetivo ref']];
+    const hitos = regH.filter(h => v(h)['Indicador ref'] === r.id);
+    const hito = hitos.length ? v(hitos[0]) : {};
+    const idsH = hitos.map(h => h.id);
+    const reps = regR.filter(x => idsH.includes(v(x)['Hito ref']))
+      .sort((a, b) => (fechaISO(v(a)['Fecha de ejecución o reporte']) || '').localeCompare(fechaISO(v(b)['Fecha de ejecución o reporte']) || '')
+        || String(a.updated_at || '').localeCompare(String(b.updated_at || '')));
+    const ult = reps.length ? v(reps[reps.length - 1]) : {};
+    const estado = textoPlano(ult['Estado de la actividad']) || 'No iniciada';
+    const fv = fechaISO(ind['F.V. Meta']);
+    const cant = parseFloat(ult['Cantidad acumulada']), metaH = parseFloat(hito['Meta del hito']);
+    const den = parseFloat(ind['Denominador']), unidad = textoPlano(hito['Unidad']);
+    const tipo = String(ind['Tipo de indicador'] || '');
+    const hayValor = !isNaN(cant) && !(cant === 0 && estado !== 'Ejecutada');
+    let resultado = 'Pendiente.';
+    if (hayValor){
+      if (/porcentaje/i.test(tipo) && den > 0) resultado = `${numTxt(cant / den * 100)} % — ${numTxt(cant)} ${unidad} de ${numTxt(den)}.`;
+      else if (/índice|indice|puntaje/i.test(tipo)) resultado = numTxt(cant);
+      else resultado = `${numTxt(cant)} ${unidad}.`.replace(/\s+\./, '.');
+    }
+    let cumplimiento;
+    if (/medición programada/i.test(estado)) cumplimiento = 'Por determinar.';
+    else if (estado === 'Ejecutada' && hayValor && metaH > 0)
+      cumplimiento = cant > metaH ? 'Meta superada.' : cant >= metaH ? 'Meta cumplida.' : 'Ejecutada sin alcanzar la meta.';
+    else if (fv) cumplimiento = fv >= hoy ? `En plazo. Vence el ${dmy(fv)}.` : `Plazo vencido el ${dmy(fv)}.`;
+    else cumplimiento = 'Sin plazo registrado.';
+    let evidencia = [];
+    try{ evidencia = JSON.parse(ult['Evidencias (enlaces)'] || '[]').map(e => textoPlano(e.etiqueta) || e.url).filter(Boolean); }catch(e){}
+    return {
+      _obj: ind['Objetivo ref'], _id: r.id, _creado: r.created_at || '',
+      n: numero[ind['Objetivo ref']],
+      objetivo: tema(o),
+      actividad: textoPlano(ind['Actividades a realizar']),
+      indicador: textoPlano(ind['Indicador']),
+      meta: textoPlano(ind['Meta']),
+      fecha: mesAnio(fv),
+      responsable: textoPlano(ind['Oficina responsable (texto)'] || o['Oficina responsable (texto)']),
+      estado,
+      freal: dmy(fechaISO(ult['Fecha real de ejecución'])),
+      lb: textoPlano(ind['Línea base']),
+      resultado, cumplimiento,
+      evidencia: evidencia.length ? evidencia.join('; ') : 'Pendiente de enlazar.',
+      analisis: textoPlano(ult['Análisis de la desviación y acción']),
+      reprog: textoPlano(ind['Reprogramación y sustento'])
+    };
+  });
+  const posFila = f => { const i = (F.ordenFilas || []).indexOf(f._id); return i < 0 ? 999 : i; };
+  return filas.sort((a, b) => a.n - b.n || posFila(a) - posFila(b) || String(a._creado).localeCompare(String(b._creado)));
+}
+
 /* Arma el Excel del formato oficial. version: número entero; fecha: AAAA-MM-DD
    o vacío si todavía no hay aprobación. Devuelve { blob, nombre, filas }. */
 async function generarFormato(codigo, version, fecha){
@@ -1961,10 +2102,15 @@ async function generarFormato(codigo, version, fecha){
   cargando(true);
   try{
     await cargarExcelJS();
-    const registros = await leerTablaQuinta(F.entidad);
-    if (!registros.length) throw new Error(`La tabla «${F.tabla}» está vacía: no hay nada que poner en el formato.`);
-    const filas = registros.map(r => r.values || {})
-      .sort((a, b) => (parseFloat(a[F.orden]) || 0) - (parseFloat(b[F.orden]) || 0));
+    let filas;
+    if (F.tipo === 'plan') filas = await filasPlan(F);
+    else {
+      const registros = await leerTablaQuinta(F.entidad);
+      filas = registros.map(r => r.values || {})
+        .sort((a, b) => (parseFloat(a[F.orden]) || 0) - (parseFloat(b[F.orden]) || 0));
+    }
+    if (!filas.length) throw new Error(`${variasTablas(F) ? 'Las tablas' : 'La tabla'} «${F.tabla}» no ${variasTablas(F) ? 'tienen' : 'tiene'} nada que poner en el formato.`);
+    const der = F.bloqueDerecha || 36, fD = F.fuenteDatos || 11, fT = F.fuenteTitulos || 11;
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'RID-SGOE'; wb.created = new Date();
@@ -1993,37 +2139,46 @@ async function generarFormato(codigo, version, fecha){
       const idImg = wb.addImage({ buffer:logo, extension:'jpeg' });
       ws.addImage(idImg, { tl:{ col:0.35, row:0.05 }, ext:{ width:76, height:78 }, editAs:'oneCell' });
     }catch(e){ /* sin logo el formato sigue siendo válido */ }
-    caja(1, 4, 1, 35, 'FACULTAD DE INGENIERÍA', { font:tnr(13, true), alignment:{ horizontal:'center', vertical:'middle' } });
-    caja(2, 4, 4, 35, (F.titulo || doc.titulo || '').toUpperCase(), { font:tnr(12, true), alignment:{ horizontal:'center', vertical:'middle', wrapText:true } });
+    caja(1, 4, 1, der - 1, 'FACULTAD DE INGENIERÍA', { font:tnr(13, true), alignment:{ horizontal:'center', vertical:'middle' } });
+    caja(2, 4, 4, der - 1, (F.titulo || doc.titulo || '').toUpperCase(), { font:tnr(12, true), alignment:{ horizontal:'center', vertical:'middle', wrapText:true } });
     const datos = [`Código: ${codigo}`, `Fecha de aprobación: ${fecha ? fechaCorta(fecha) : 'pendiente de aprobación'}`,
       `Versión: ${dosDigitos(version)}`, 'Página: 1 de 1'];
-    datos.forEach((t, i) => caja(i + 1, 36, i + 1, ultimaCol, t, { font:tnr(10), alignment:{ horizontal:'left', vertical:'middle' } }));
+    datos.forEach((t, i) => caja(i + 1, der, i + 1, ultimaCol, t, { font:tnr(10), alignment:{ horizontal:'left', vertical:'middle' } }));
 
     // Fila de títulos
     const gris = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFD9D9D9' } };
-    ws.getRow(6).height = 20.25;
+    ws.getRow(6).height = F.altoTitulos || 20.25;
     F.columnas.forEach(([, titulo, c1, c2]) => caja(6, c1, 6, c2, titulo,
-      { font:tnr(11, true), fill:gris, alignment:{ horizontal:'center', vertical:'middle', wrapText:true } }));
+      { font:tnr(fT, true), fill:gris, alignment:{ horizontal:'center', vertical:'middle', wrapText:true } }));
 
-    // Filas de datos. El alto crece si el texto no entra en las 61.5 de la plantilla.
+    // Filas de datos. El alto crece si el texto no entra en el alto de la plantilla.
+    const relleno = argb => argb ? { type:'pattern', pattern:'solid', fgColor:{ argb } } : undefined;
     filas.forEach((v, i) => {
       const r = 7 + i;
       let lineas = 1;
-      F.columnas.forEach(([campo, , c1, c2, alinear]) => {
+      F.columnas.forEach(([campo, , c1, c2, alinear, seguimiento]) => {
         const t = textoCelda(v[campo]);
         const ancho = Array.from({ length:c2 - c1 + 1 }, (_, k) => F.anchos[c1 - 1 + k] || 13).reduce((a, b) => a + b, 0);
-        lineas = Math.max(lineas, Math.ceil(t.length / Math.max(1, ancho * 1.05)));
+        const porLinea = Math.max(1, ancho * 1.05 * 11 / fD);
+        lineas = Math.max(lineas, t.split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / porLinea)), 0));
         const num = alinear === 'center' && /^\d+$/.test(t);
-        caja(r, c1, r, c2, num ? parseInt(t, 10) : t,
-          { font:tnr(11), alignment:{ horizontal:alinear || 'left', vertical:'middle', wrapText:true } });
+        const estilo = { font:tnr(fD, campo === 'n'), alignment:{ horizontal:alinear || 'left', vertical:'middle', wrapText:true } };
+        const fondo = relleno(seguimiento ? F.rellenoSeguimiento : F.relleno); if (fondo) estilo.fill = fondo;
+        caja(r, c1, r, c2, num ? parseInt(t, 10) : t, estilo);
       });
-      ws.getRow(r).height = Math.max(F.altoFila, lineas * 15 + 8);
+      ws.getRow(r).height = Math.min(409, Math.max(F.altoFila, lineas * fD * 1.35 + 8));
     });
 
-    // Pie: de dónde salió el archivo, para la trazabilidad
-    const pie = 7 + filas.length + 1;
+    // Nota del formato (si la tiene) y pie: de dónde salió el archivo, para la trazabilidad
+    let pie = 7 + filas.length + 1;
+    if (F.nota){
+      ws.mergeCells(pie, 1, pie, ultimaCol - 1);
+      Object.assign(ws.getCell(pie, 1), { value:F.nota, font:tnr(fT), alignment:{ horizontal:'left', vertical:'middle', wrapText:true } });
+      ws.getRow(pie).height = 37.5;
+      pie++;
+    }
     ws.mergeCells(pie, 1, pie, 20);
-    Object.assign(ws.getCell(pie, 1), { value:`Generado desde el aplicativo del SGOE (tabla «${F.tabla}») el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`,
+    Object.assign(ws.getCell(pie, 1), { value:`Generado desde el aplicativo del SGOE (${variasTablas(F) ? 'tablas' : 'tabla'} «${F.tabla}») el ${fechaCorta(S.hoy)} por ${S.perfil.nombre}.`,
       font:tnr(9), alignment:{ horizontal:'left', vertical:'middle' } });
     ws.getRow(pie).height = 18;
 
@@ -2235,7 +2390,7 @@ function avisoCambioTabla(d){
   const prox = siguienteVersion(d.version);
   const puede = S.perfil.puede.registrarExistente && !d.solicitudEnCurso;
   return `<div class="aviso-caja" style="background:#fff4d6;border-color:#e0a800;margin:0 0 12px">
-    <b>⚠ ${F.cuadrantes ? 'Las tablas' : 'La tabla'} «${esc(F.tabla)}» ${F.cuadrantes ? 'cambiaron' : 'cambió'} después de publicarse la v${esc(ver(d.version))}.</b>
+    <b>⚠ ${variasTablas(F) ? 'Las tablas' : 'La tabla'} «${esc(F.tabla)}» ${variasTablas(F) ? 'cambiaron' : 'cambió'} después de publicarse la v${esc(ver(d.version))}.</b>
     Último cambio en QuintaDB: <b>${fechaCorta(c.ultimo)}</b>. Versión vigente publicada: <b>${fechaCorta(c.ref)}</b>.
     <br>El documento oficial <b>no incluye esos cambios</b>. Cuando estén aprobados, publique la <b>v${prox}</b>:
     botón <b>«Subir v${prox} ya aprobada»</b> → <b>«Generar el formato y cargarlo»</b>.
@@ -2305,10 +2460,10 @@ function cajaGenerar(idCampo, codigo, version, origen, idFecha){
   const F = formatoDe(codigo); if (!F) return '';
   const fArg = idFecha ? `'${idFecha}'` : 'null';
   return `<div class="completo aviso-caja info" style="margin:0">
-    <b>Este documento se genera desde el sistema.</b> Su contenido vive en la tabla <b>«${esc(F.tabla)}»</b> de QuintaDB.
-    No hay que descargar nada ni armar el documento a mano: el botón lee ${F.cuadrantes ? 'las tablas' : 'la tabla'}, arma el formato oficial${F.tipo === 'foda' ? ' en PDF' : ''} —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
+    <b>Este documento se genera desde el sistema.</b> Su contenido vive en ${variasTablas(F) ? 'las tablas' : 'la tabla'} <b>«${esc(F.tabla)}»</b> de QuintaDB.${F.tipo === 'plan' ? ' Las columnas de seguimiento (estado, fecha real, resultado, cumplimiento, evidencia y análisis) salen del <b>último reporte de avance</b> de cada actividad.' : ''}
+    No hay que descargar nada ni armar el documento a mano: el botón lee ${variasTablas(F) ? 'las tablas' : 'la tabla'}, arma el formato oficial${F.tipo === 'foda' ? ' en PDF' : ''} —logo, código, <b>versión ${dosDigitos(version)}</b>${idFecha?' y la fecha de aprobación que escribas arriba':''}— y lo deja cargado aquí mismo.
     <ol style="margin:8px 0 0 18px;padding:0">
-      <li>Antes, corrige lo que haga falta <b>en ${F.cuadrantes ? 'las tablas' : 'la tabla'} «${esc(F.tabla)}»</b>. Lo que está ahí es lo que saldrá en el formato.</li>
+      <li>Antes, corrige lo que haga falta <b>en ${variasTablas(F) ? 'las tablas' : 'la tabla'} «${esc(F.tabla)}»</b>. Lo que está ahí es lo que saldrá en el formato.</li>
       ${F.tipo === 'foda' ? '<li><b>Primero llena los campos de arriba</b>: fecha de aprobación, <b>Elaboró, Revisó y Aprobó</b> y <b>qué cambió</b>. Van en la carátula, en el control de emisión y en el control de cambios.</li>' : ''}
       ${idFecha?'<li>Escribe arriba la <b>fecha de aprobación</b>: va impresa en el encabezado.</li>':''}
       <li>Pulsa <b>«Generar el formato y cargarlo»</b>. En unos segundos el archivo aparece en la lista de archivos de este formulario.</li>
